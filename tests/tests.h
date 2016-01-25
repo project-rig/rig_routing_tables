@@ -5,6 +5,7 @@
 
 Suite* bitset_suite(void);
 Suite* routing_table_suite(void);
+Suite* merge_suite(void);
 
 
 #define __TEST_H__

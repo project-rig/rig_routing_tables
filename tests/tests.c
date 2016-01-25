@@ -11,6 +11,9 @@ int main(void)
   Suite *s_routing_table = routing_table_suite();
   srunner_add_suite(sr, s_routing_table);
 
+  Suite *s_merge = merge_suite();
+  srunner_add_suite(sr, s_merge);
+
   // Run the tests
   srunner_run_all(sr, CK_NORMAL);
 
