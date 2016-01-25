@@ -4,8 +4,12 @@
 int main(void)
 {
   int n_failed;
-  Suite *s = bitset_suite();
-  SRunner *sr = srunner_create(s);
+
+  Suite *s_bitset = bitset_suite();
+  SRunner *sr = srunner_create(s_bitset);
+
+  Suite *s_routing_table = routing_table_suite();
+  srunner_add_suite(sr, s_routing_table);
 
   // Run the tests
   srunner_run_all(sr, CK_NORMAL);

@@ -1,6 +1,6 @@
-OBJECTS=tests.o test_bitset.o
+OBJECTS=tests.o test_bitset.o test_routing_table.o
 INC_DIR=../include/
-CFLAGS+=-I ${INC_DIR} -fprofile-arcs -ftest-coverage -g
+CFLAGS+=-I ${INC_DIR} -fprofile-arcs -ftest-coverage -g --std=gnu99
 LDFLAGS+=-lcheck
 
 coverage : run_tests

@@ -20,7 +20,7 @@ static inline uint32_t keymask_get_xs(keymask_t km)
 // Get a count of the Xs in a keymask
 static inline unsigned int keymask_count_xs(keymask_t km)
 {
-  return __popcount(get_xs(km));
+  return __builtin_popcount(keymask_get_xs(km));
 }
 
 
@@ -35,10 +35,12 @@ static inline bool keymask_intersect(keymask_t a, keymask_t b)
 //     c := a | b
 static inline keymask_t keymask_merge(keymask_t a, keymask_t b)
 {
+  keymask_t c;
   uint32_t new_xs = ~(a.key ^ b.key);
-  uint32_t new_mask = a.mask & b.mask & new_xs;
-  uint32_t new_key = (a.key | b.key) & new_mask;
-  return {new_key, new_mask};
+  c.mask = a.mask & b.mask & new_xs;
+  c.key = (a.key | b.key) & c.mask;
+
+  return c;
 }
 
 

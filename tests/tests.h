@@ -3,7 +3,8 @@
 
 #ifndef __TEST_H__
 
-Suite* bitset_suite(void);  // Get the tests for the bitset
+Suite* bitset_suite(void);
+Suite* routing_table_suite(void);
 
 
 #define __TEST_H__
