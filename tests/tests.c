@@ -14,6 +14,9 @@ int main(void)
   Suite *s_merge = merge_suite();
   srunner_add_suite(sr, s_merge);
 
+  Suite *s_oc = ordered_covering_suite();
+  srunner_add_suite(sr, s_oc);
+
   // Run the tests
   srunner_run_all(sr, CK_NORMAL);
 

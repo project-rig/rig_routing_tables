@@ -1,5 +1,4 @@
-TESTS=bitset routing_table merge
-OBJECTS=tests.o test_bitset.o test_routing_table.o test_merge.o
+OBJECTS=tests.o test_bitset.o test_routing_table.o test_merge.o test_ordered_covering.o
 INC_DIR=../include/
 CFLAGS+=-I ${INC_DIR} -fprofile-arcs -ftest-coverage -g --std=gnu99
 LDFLAGS+=-lcheck
