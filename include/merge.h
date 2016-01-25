@@ -62,7 +62,7 @@ static inline void merge_add(merge_t* m, unsigned int i)
     entry_t e = m->table->entries[i];
 
     // Get the keymask
-    if (m->entries.count == 0)
+    if (m->keymask.key == 0xffffffff && m->keymask.mask == 0x00000000)
     {
       // If this is the first entry in the merge then the merge keymask is a copy
       // of the entry keymask.
@@ -94,24 +94,24 @@ static inline void merge_remove(merge_t* m, unsigned int i)
   if (bitset_remove(&(m->entries), i))
   {
     // Rebuild the key and mask from scratch
-    keymask_t km;
-    bool init = false;
+    m->keymask.key  = 0xffffffff;
+    m->keymask.mask = 0x000000000;
     for (unsigned int j = 0; j < m->table->size; j++)
     {
       entry_t e = m->table->entries[j];
 
       if (bitset_contains(&(m->entries), j))
       {
-        if (!init)
+        if (m->keymask.key  == 0xffffffff && m->keymask.mask == 0x00000000)
         {
           // Initialise the keymask
-          km = e.keymask;
-          init = true;
+          m->keymask.key  = e.keymask.key;
+          m->keymask.mask = e.keymask.mask;
         }
         else
         {
           // Merge the keymask
-          km = keymask_merge(km, e.keymask);
+          m->keymask = keymask_merge(m->keymask, e.keymask);
         }
       }
     }
