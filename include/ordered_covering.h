@@ -105,17 +105,108 @@ static inline void oc_upcheck(merge_t *m, int min_goodness)
 }
 
 
-/*
-// Remove entries from a merge such that the merge would not cover existing
-// entries positioned below the merge.
-static inline void oc_downcheck(
-  merge_t *merge, int min_goodness, aliases_t *aliases
-)
+static inline void _get_settable(keymask_t merge_km, keymask_t covered_km,
+                                 unsigned int *stringency,
+                                 uint32_t *set_to_zero,
+                                 uint32_t *set_to_one)
 {
-  // TODO
+  // We can "set" any bit where the merge contains an X and the covered
+  // entry doesn't.
+  uint32_t settable = ~keymask_get_xs(covered_km) & keymask_get_xs(merge_km);
+  unsigned int new_stringency = __builtin_popcount(settable);
+
+  uint32_t this_set_to_zero = settable &  covered_km.key;
+  uint32_t this_set_to_one  = settable & ~covered_km.key;
+
+  // The stringency indicates how many bits *could* be set to avoid the cover.
+  // If this new stringency is lower than the existing stringency then we reset
+  // which bits may be set.
+  if (new_stringency < *stringency)
+  {
+    *stringency  = new_stringency;      // Update the stringency count
+    *set_to_zero = this_set_to_zero;
+    *set_to_one  = this_set_to_one;
+  }
+  else if (new_stringency == *stringency)
+  {
+    *set_to_zero |= this_set_to_zero;
+    *set_to_one  |= this_set_to_one;
+  }
+
 }
 
 
+// Remove entries from a merge such that the merge would not cover existing
+// entries positioned below the merge.
+static inline void oc_downcheck(merge_t *m, int min_goodness, aliases_t *a)
+{
+  table_t *table = m->table;  // Retrieve the table
+  bool covered_entries = false;  // Record if there were any covered entries
+  unsigned int stringency = 33;  // Not at all stringent
+  uint32_t set_to_zero = 0x0;    // Mask of which bits could be set to zero
+  uint32_t set_to_one  = 0x0;    // Mask of which bits could be set to one
+
+  // Look at every entry between the insertion index and the end of the table
+  // to see if there are any entries which could be covered by the entry
+  // resulting from the merge.
+  unsigned int insertion_point = oc_get_insertion_point(
+      table, keymask_count_xs(m->keymask));
+  for (unsigned int i = insertion_point;
+       i < table->size && stringency > 0;
+       i++)
+  {
+    keymask_t km = table->entries[i].keymask;
+    if (keymask_intersect(km, m->keymask))
+    {
+      if (!aliases_contains(a, km))
+      {
+        // The entry doesn't contain any aliases so we need to avoid hitting
+        // the key that has just been identified.
+        covered_entries = true;
+        _get_settable(m->keymask, km, &stringency, &set_to_zero, &set_to_one);
+      }
+      else
+      {
+        // We need to avoid any keymasks contained within the alias table.
+        alias_list_t *l = aliases_find(a, km);
+        while (l != NULL)
+        {
+          for (unsigned int j = 0; j < l->n_elements; j++)
+          {
+            km = alias_list_get(l, j);
+
+            if (keymask_intersect(km, m->keymask))
+            {
+              covered_entries = true;
+              _get_settable(m->keymask, km, &stringency,
+                            &set_to_zero, &set_to_one);
+            }
+          }
+
+          // Progress through the alias list
+          l = l->next;
+        }
+      }
+    }
+  }
+
+  if (!covered_entries)
+  {
+    // If there were no covered entries then we needn't do anything
+    return;
+  }
+
+  if (stringency == 0)
+  {
+    // We can't avoid a covered entry at all so we need to empty the merge
+    // entirely.
+    merge_clear(m);
+    return;
+  }
+}
+
+
+/*
 // Get the best merge which can be applied to a routing table
 static inline merge_t oc_get_best_merge(table_t* table, aliases_t *aliases)
 {

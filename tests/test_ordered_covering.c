@@ -135,6 +135,189 @@ START_TEST(test_oc_upcheck)
 END_TEST
 
 
+START_TEST(test_oc_downcheck_does_nothing)
+{
+  // Test that refine downcheck does nothing if merging would not generate any
+  // covers, eg.
+  //
+  //     11001 -> E
+  //     11010 -> E
+  //     00XXX -> NE
+  //     X1XXX -> N  {01000, 11111}
+  //
+  // Merging the first 2 entries will not result in any covering occurring.
+  entry_t entries[] = {
+    {{0b11001, 0b11111}, 0b001},
+    {{0b11010, 0b11111}, 0b001},
+    {{0b00000, 0b11000}, 0b010},
+    {{0b01000, 0b01000}, 0b100},
+  };
+  table_t table = {4, entries};
+
+  // Define the merge
+  merge_t m;
+  merge_init(&m, &table);
+  merge_add(&m, 0);
+  merge_add(&m, 1);
+
+  // Create the aliases table
+  aliases_t aliases = aliases_init();
+  alias_list_t *l1 = alias_list_new(2);
+  aliases_insert(&aliases, entries[3].keymask, (void *) l1);
+
+  keymask_t k1 = {0b01000, 0b11111}, k2 = {0b11111, 0b11111};
+  alias_list_append(l1, k1);
+  alias_list_append(l1, k2);
+
+  // Check that the downcheck does nothing to the merge
+  oc_downcheck(&m, 0, &aliases);
+
+  ck_assert(merge_contains(&m, 0));
+  ck_assert(merge_contains(&m, 1));
+  ck_assert(!merge_contains(&m, 2));
+  ck_assert(!merge_contains(&m, 3));
+
+  // Tidy up
+  merge_delete(&m);
+  alias_list_delete(l1);
+  aliases_clear(&aliases);
+}
+END_TEST
+
+
+START_TEST(test_oc_downcheck_clears_merge_if_unresolvable)
+{
+  // Test that the downcheck will empty a merge if it is not possible to avoid
+  // a cover.
+  entry_t entries[] = {
+    {{0b1001, 0b1111}, 0b001},  // 1001 -> E
+    {{0b1010, 0b1111}, 0b001},  // 1010 -> E
+    {{0b1000, 0b1000}, 0b100},  // 1XXX -> N
+  };
+  table_t table = {3, entries};
+
+  // Define the merge
+  merge_t m;
+  merge_init(&m, &table);
+  merge_add(&m, 0);
+  merge_add(&m, 1);
+
+  // Create an empty aliases table
+  aliases_t aliases = aliases_init();
+
+  // Check that the downcheck empties the merge
+  oc_downcheck(&m, 0, &aliases);
+
+  ck_assert(!merge_contains(&m, 0));
+  ck_assert(!merge_contains(&m, 1));
+  ck_assert(!merge_contains(&m, 2));
+
+  // Add entries to the alias table such that
+  // 1XXX = {1011, 1100}
+  alias_list_t *l1 = alias_list_new(2);
+  keymask_t km1 = {0b1011, 0xf}, km2 = {0b1100, 0xf};
+  alias_list_append(l1, km1);
+  alias_list_append(l1, km2);
+
+  // Reset the merge, apply the downcheck again and ensure that the result is
+  // the same
+  merge_add(&m, 0);
+  merge_add(&m, 1);
+
+  oc_downcheck(&m, 0, &aliases);
+
+  ck_assert(!merge_contains(&m, 0));
+  ck_assert(!merge_contains(&m, 1));
+  ck_assert(!merge_contains(&m, 2));
+
+  // Tidy up
+  merge_delete(&m);
+  alias_list_delete(l1);
+  aliases_clear(&aliases);
+}
+END_TEST
+
+
+START_TEST(test_oc_downcheck_removes_one_entry_a)
+{
+  // Test the first entry is removed from the merge for the following table:
+  //
+  //     1000 -> E
+  //     0000 -> E
+  //     0001 -> E
+  //     1XXX -> N
+  entry_t entries[] = {
+    {{0b1000, 0xf}, 0b001},
+    {{0b0000, 0xf}, 0b001},
+    {{0b0001, 0xf}, 0b001},
+    {{0b1000, 0x8}, 0b100},
+  };
+  table_t table = {4, entries};
+
+  // Define the merge
+  merge_t m;
+  merge_init(&m, &table);
+  merge_add(&m, 0);
+  merge_add(&m, 1);
+  merge_add(&m, 2);
+
+  // Create an empty aliases table
+  aliases_t aliases = aliases_init();
+
+  // Check that the first entry is removed
+  oc_downcheck(&m, 0, &aliases);
+
+  ck_assert(!merge_contains(&m, 0));  // Removed from the merge
+  ck_assert(merge_contains(&m, 1));
+  ck_assert(merge_contains(&m, 2));
+  ck_assert(!merge_contains(&m, 3));  // Never part of the merge
+
+  // Tidy up
+  merge_delete(&m);
+}
+END_TEST
+
+
+START_TEST(test_oc_downcheck_removes_one_entry_b)
+{
+  // Test the first entry is removed from the merge for the following table:
+  //
+  //     0000 -> E
+  //     1000 -> E
+  //     1001 -> E
+  //     0XXX -> N
+  entry_t entries[] = {
+    {{0b0000, 0xf}, 0b001},
+    {{0b1000, 0xf}, 0b001},
+    {{0b1001, 0xf}, 0b001},
+    {{0b0000, 0x8}, 0b100},
+  };
+  table_t table = {4, entries};
+
+  // Define the merge
+  merge_t m;
+  merge_init(&m, &table);
+  merge_add(&m, 0);
+  merge_add(&m, 1);
+  merge_add(&m, 2);
+
+  // Create an empty aliases table
+  aliases_t aliases = aliases_init();
+
+  // Check that the first entry is removed
+  oc_downcheck(&m, 0, &aliases);
+
+  ck_assert(!merge_contains(&m, 0));  // Removed from the merge
+  ck_assert(merge_contains(&m, 1));
+  ck_assert(merge_contains(&m, 2));
+  ck_assert(!merge_contains(&m, 3));  // Never part of the merge
+
+  // Tidy up
+  merge_delete(&m);
+}
+END_TEST
+
+
 START_TEST(test_merge_apply_at_beginning_of_table)
 {
   // Merge the first two entries:
@@ -313,6 +496,10 @@ Suite* ordered_covering_suite(void)
   tcase_add_test(tests, test_get_insertion_point_at_end_of_table);
 
   tcase_add_test(tests, test_oc_upcheck);
+  tcase_add_test(tests, test_oc_downcheck_does_nothing);
+  tcase_add_test(tests, test_oc_downcheck_clears_merge_if_unresolvable);
+  tcase_add_test(tests, test_oc_downcheck_removes_one_entry_a);
+  tcase_add_test(tests, test_oc_downcheck_removes_one_entry_b);
 
   tcase_add_test(tests, test_merge_apply_at_beginning_of_table);
   tcase_add_test(tests, test_merge_apply_at_end_of_table);
