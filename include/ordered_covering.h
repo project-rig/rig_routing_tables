@@ -1,3 +1,4 @@
+#include "aliases.h"
 #include "bitset.h"
 #include "merge.h"
 #include "routing_table.h"
@@ -5,14 +6,53 @@
 #ifndef __ORDERED_COVERING_H__
 
 
-typedef void aliases_t;
+// Get the goodness for a merge
+static inline int merge_goodness(merge_t *m)
+{
+  return (33 - keymask_count_xs(m->keymask)) * (m->entries.count - 1);
+}
 
 
 // Get the index where the routing table entry resulting from a merge should be
 // inserted.
-static inline unsigned int oc_get_insertion_point(merge_t *m)
+static inline unsigned int oc_get_insertion_point(
+  table_t *table,
+  unsigned int generality
+)
 {
-  // TODO
+  // Perform a binary search of the table to find entries of similar generality
+  unsigned int bottom = 0;
+  unsigned int top = table->size;
+  unsigned int pos = top / 2;
+
+  while (bottom < pos && pos < top &&
+         keymask_count_xs(table->entries[pos].keymask) != generality)
+  {
+    unsigned int entry_generality = \
+      keymask_count_xs(table->entries[pos].keymask);
+
+    if (entry_generality < generality)
+    {
+      bottom = pos;
+    }
+    else
+    {
+      top = pos;
+    }
+
+    // Update the position
+    pos = bottom + (top - bottom) / 2;
+  }
+
+  // Iterate through the table until either the next generality or the end of
+  // the table is found.
+  while (pos < table->size &&
+         keymask_count_xs(table->entries[pos].keymask) <= generality)
+  {
+    pos++;
+  }
+
+  return pos;
 }
 
 
@@ -21,11 +61,13 @@ static inline unsigned int oc_get_insertion_point(merge_t *m)
 static inline void oc_upcheck(merge_t *m, int min_goodness)
 {
   // Get the point where the merge will be inserted into the table.
-  unsigned int insertion_index = oc_get_insertion_point(m);
+  unsigned int generality = keymask_count_xs(m->keymask);
+  unsigned int insertion_index = oc_get_insertion_point(m->table, generality);
 
   // For every entry in the merge check that the entry would not be covered by
   // any existing entries if it were to be merged.
-  for (unsigned int _i = m->table->size, i = m->table->size - 1; _i > 0;
+  for (unsigned int _i = m->table->size, i = m->table->size - 1;
+       _i > 0 && merge_goodness(m) > min_goodness;
        _i--, i--)
   {
     if (!merge_contains(m, i))
@@ -48,13 +90,22 @@ static inline void oc_upcheck(merge_t *m, int min_goodness)
       if (keymask_intersect(km, other_km))
       {
         merge_remove(m, i);  // Remove from the merge
-        insertion_index = oc_get_insertion_point(m);
+        generality = keymask_count_xs(m->keymask);
+        insertion_index = oc_get_insertion_point(m->table, generality);
       }
     }
+  }
+
+  // Completely empty the merge if its goodness drops below the minimum
+  // specified
+  if (merge_goodness(m) <= min_goodness)
+  {
+    merge_clear(m);
   }
 }
 
 
+/*
 // Remove entries from a merge such that the merge would not cover existing
 // entries positioned below the merge.
 static inline void oc_downcheck(
@@ -108,32 +159,32 @@ static inline merge_t oc_get_best_merge(table_t* table, aliases_t *aliases)
 
     // If the working merge is better than the current best merge then continue
     // to refine it until it is valid.
-    if (best.goodness < working.goodness)
+    if (merge_goodness(best) < merge_goodness(working))
     {
       // Perform the first downcheck
-      oc_downcheck(&working, best.goodness, aliases);
+      oc_downcheck(&working, merge_goodness(best), aliases);
 
       // If the working merge is still better than the current best merge then
       // continue to refine it.
-      if (best.goodness < working.goodness)
+      if (merge_goodness(best) < merge_goodness(working))
       {
         // Perform the upcheck, seeing if this actually makes a change to the
         // size of the merge.
         unsigned int before = working.entries.count;
-        oc_upcheck(&working, best.goodness);
+        oc_upcheck(&working, merge_goodness(best));
         bool changed = (before != working.entries.count);
 
         // If the merge is still better than the current best merge AND the
         // number of entries was changed by the upcheck we need to perform
         // another downcheck.
-        if (best.goodness < working.goodness && changed)
+        if (merge_goodness(best) < merge_goodness(working) && changed)
         {
-          oc_downcheck(&working, best.goodness, aliases);
+          oc_downcheck(&working, merge_goodness(best), aliases);
         }
 
         // If the merge is still better than the current best merge we swap the
         // current and best merges to record the new best merge.
-        if (best.goodness < working.goodness)
+        if (merge_goodness(best) < merge_goodness(working))
         {
           merge_t other = working;
           working = best;
@@ -193,6 +244,7 @@ static inline void oc_minimise(
     }
   }
 }
+*/
 
 
 #define __ORDERED_COVERING_H__

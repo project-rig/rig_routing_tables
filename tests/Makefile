@@ -4,7 +4,7 @@ CFLAGS+=-I ${INC_DIR} -fprofile-arcs -ftest-coverage -g --std=gnu99 -Wall -Werro
 LDFLAGS+=-lcheck
 
 coverage : run_tests
-	gcov test_bitset test_routing_table test_merge test_aliases
+	gcov test_bitset test_routing_table test_merge test_aliases test_ordered_covering
 
 run_tests : tests
 	valgrind --leak-check=full -q ./tests
