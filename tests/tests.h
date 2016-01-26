@@ -7,6 +7,7 @@ Suite* bitset_suite(void);
 Suite* routing_table_suite(void);
 Suite* merge_suite(void);
 Suite* ordered_covering_suite(void);
+Suite* aliases_suite(void);
 
 
 #define __TEST_H__
