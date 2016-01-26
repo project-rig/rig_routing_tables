@@ -17,7 +17,7 @@ static inline int merge_goodness(merge_t *m)
 // inserted.
 static inline unsigned int oc_get_insertion_point(
   table_t *table,
-  unsigned int generality
+  const unsigned int generality
 )
 {
   // Perform a binary search of the table to find entries of similar generality
@@ -201,15 +201,86 @@ static inline merge_t oc_get_best_merge(table_t* table, aliases_t *aliases)
   // Return the best merge
   return best;
 }
+*/
 
 
 // Apply a merge to the table against which it is defined
 static inline void oc_merge_apply(merge_t *m, aliases_t *aliases)
 {
-  // TODO
+  // Get the new entry
+  entry_t new_entry;
+  new_entry.keymask = m->keymask;
+  new_entry.route = m->route;
+
+  // Get the insertion point for the new entry
+  unsigned int insertion_point = oc_get_insertion_point(
+    m->table, keymask_count_xs(m->keymask));
+
+  // Keep track of the size of the finished table
+  table_t *table = m->table;
+  unsigned int new_size = table->size + 1;
+
+  // Create a new aliases list with sufficient space for the keymasks of all of
+  // the entries in the merge.
+  alias_list_t *new_aliases = alias_list_new(m->entries.count);
+  aliases_insert(aliases, new_entry.keymask, (void *) new_aliases);
+
+  // Use two iterators to move through the table copying entries from one
+  // position to the other as required.
+  unsigned int insert = 0;
+  for (unsigned int remove = 0; remove < table->size; remove++)
+  {
+    // Insert the new entry if this is the correct position at which to do so
+    if (remove == insertion_point)
+    {
+      table->entries[insert] = new_entry;
+      insert++;
+    }
+
+    if (!merge_contains(m, remove))
+    {
+      // If this entry is not contained within the merge then copy it from its
+      // current position to its new position.
+      table->entries[insert] = table->entries[remove];
+      insert++;
+    }
+    else
+    {
+      // Otherwise update the aliases table to account for the entry which is
+      // being merged.
+      keymask_t km = table->entries[remove].keymask;
+      if (aliases_contains(aliases, km))
+      {
+        // Join the old list of aliases with the new
+        alias_list_join(new_aliases, aliases_find(aliases, km));
+
+        // Remove the old aliases entry
+        aliases_remove(aliases, km);
+      }
+      else
+      {
+        // Include the keymask in the new list of aliases
+        alias_list_append(new_aliases, km);
+      }
+
+      // Decrement the final table size to account for this entry being removed.
+      new_size--;
+    }
+  }
+
+  // If inserting beyond the old end of the table then perform the insertion at
+  // the new end of the table.
+  if (insertion_point == table->size)
+  {
+    table->entries[insert] = new_entry;
+  }
+
+  // Record the new size of the table
+  table->size = new_size;
 }
 
 
+/*
 // Apply the ordered covering algorithm to a routing table
 // Minimise the table until either the table is shorter than the target length
 // or no more merges are possible.

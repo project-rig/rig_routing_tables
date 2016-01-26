@@ -68,6 +68,44 @@ START_TEST(test_aliases_lifecycle)
 END_TEST
 
 
+START_TEST(test_aliases_list)
+{
+  // Create a new aliases list for 5 elements
+  alias_list_t *l1 = alias_list_new(5);
+  ck_assert_int_eq(l1->n_elements, 0);  // Not added any elements
+  ck_assert_int_eq(l1->max_size, 5);  // Can contain 5 elements
+
+  // Add an element
+  keymask_t km = {0x0, 0xf};
+  alias_list_append(l1, km);
+  ck_assert_int_eq(l1->n_elements, 1);  // Now contains 1 element
+  ck_assert(alias_list_get(l1, 0).key == km.key);  // Check the element is expected
+  ck_assert(alias_list_get(l1, 0).mask == km.mask);  // Check the element is expected
+
+  // This should cause no problems with memory accesses
+  ck_assert(alias_list_append(l1, km));
+  ck_assert(alias_list_append(l1, km));
+  ck_assert(alias_list_append(l1, km));
+  ck_assert(alias_list_append(l1, km));
+  ck_assert(!alias_list_append(l1, km));  // This will be a problem!
+
+  // Create a new alias list and append it to the existing list
+  alias_list_t *l2 = alias_list_new(10);
+  alias_list_join(l1, l2);
+  ck_assert(l1->next == l2);
+
+  // Create a new alias list and append it to the existing list
+  alias_list_t *l3 = alias_list_new(7);
+  alias_list_join(l1, l3);
+  ck_assert(l1->next == l2);
+  ck_assert(l2->next == l3);
+
+  // Tidy up, should delete everything
+  alias_list_delete(l1);
+}
+END_TEST
+
+
 Suite* aliases_suite(void)
 {
   Suite *s;
@@ -79,6 +117,7 @@ Suite* aliases_suite(void)
 
   // Add the tests
   tcase_add_test(tests, test_aliases_lifecycle);
+  tcase_add_test(tests, test_aliases_list);
 
   return s;
 }

@@ -8,8 +8,8 @@ typedef struct _merge_t
   bitset_t entries;  // Set of entries included in the merge
   table_t* table;    // Table against which the merge is defined
 
-  int goodness;      // Goodness of the merge
   keymask_t keymask; // Keymask resulting from the merge
+  uint32_t route;    // Route taken by entries in the merge
 } merge_t;
 
 
@@ -19,17 +19,17 @@ static inline void merge_clear(merge_t* m)
   // Clear the bitset
   bitset_clear(&(m->entries));
 
-  // Initialise the keymask and goodness
+  // Initialise the keymask and route
   m->keymask.key  = 0xffffffff;  // !!!...
   m->keymask.mask = 0x00000000;  // Matches nothing
-  m->goodness = -1;  // Contains no entries at present
+  m->route = 0x0;
 }
 
 
 // Initialise a merge
 static inline bool merge_init(merge_t* m, table_t* table)
 {
-  // Store the table pointer, initialise the keymask and goodness
+  // Store the table pointer, initialise the keymask and route
   m->table = table;
 
   // Initialise the bitset
@@ -74,8 +74,8 @@ static inline void merge_add(merge_t* m, unsigned int i)
       m->keymask = keymask_merge(m->keymask, e.keymask);
     }
 
-    // Update the recorded goodness of the merge
-    m->goodness++;
+    // Add the route
+    m->route |= e.route;
   }
 }
 
@@ -94,11 +94,13 @@ static inline void merge_remove(merge_t* m, unsigned int i)
   if (bitset_remove(&(m->entries), i))
   {
     // Rebuild the key and mask from scratch
+    m->route = 0x0;
     m->keymask.key  = 0xffffffff;
     m->keymask.mask = 0x000000000;
     for (unsigned int j = 0; j < m->table->size; j++)
     {
       entry_t e = m->table->entries[j];
+      m->route |= e.route;
 
       if (bitset_contains(&(m->entries), j))
       {
@@ -115,9 +117,6 @@ static inline void merge_remove(merge_t* m, unsigned int i)
         }
       }
     }
-
-    // Update the recorded goodness of the merge
-    m->goodness--;
   }
 }
 

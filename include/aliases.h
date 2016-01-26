@@ -8,6 +8,9 @@
 
 #ifndef __ALIASES_H__
 
+/*****************************************************************************/
+/* Map-like object ***********************************************************/
+
 typedef struct _node_t
 {
   // There is a child in each of three directions
@@ -198,6 +201,94 @@ static inline void aliases_clear(aliases_t *a)
 {
   _aliases_clear(a, 31);
 }
+
+
+/*****************************************************************************/
+
+
+/*****************************************************************************/
+/* Vector-like object ********************************************************/
+
+
+typedef struct _alias_list_t
+{
+  // Linked list of arrays
+  unsigned int n_elements;     // Elements in this instance
+  unsigned int max_size;       // Max number of elements in this instance
+  struct _alias_list_t *next;  // Next element in list of lists
+  keymask_t data;              // Data region
+} alias_list_t;
+
+
+// Create a new list on the stack
+static inline alias_list_t* alias_list_new(unsigned int max_size)
+{
+  // Compute how much memory to allocate
+  unsigned int size = sizeof(alias_list_t) +
+                      (max_size - 1)*sizeof(keymask_t);
+
+  // Allocate and then fill in values
+  alias_list_t *as = MALLOC(size);
+  as->n_elements = 0;
+  as->max_size = max_size;
+  as->next = NULL;
+
+  return as;
+}
+
+
+// Append an element to a list
+static inline bool alias_list_append(alias_list_t *as, keymask_t val)
+{
+  if (as->n_elements < as->max_size)
+  {
+    (&as->data)[as->n_elements] = val;
+    as->n_elements++;
+
+    return true;
+  }
+  else
+  {
+    // Cannot append!
+    return false;
+  }
+}
+
+
+// Get an element from the list
+static inline keymask_t alias_list_get(alias_list_t *as, unsigned int i)
+{
+  return (&as->data)[i];
+}
+
+
+// Append a list to an existing list
+static inline void alias_list_join(alias_list_t *a, alias_list_t *b)
+{
+  // Traverse the list elements until we reach the end.
+  while (a->next != NULL)
+  {
+    a = a->next;
+  }
+
+  // Store the next element
+  a->next = b;
+}
+
+
+// Delete all elements in an alias list
+static inline void alias_list_delete(alias_list_t *a)
+{
+  if (a->next != NULL)
+  {
+    alias_list_delete(a->next);
+    a->next = NULL;
+  }
+  FREE(a);
+}
+
+
+/*****************************************************************************/
 
 #define __ALIASES_H__
 #endif  // __ALIASES_H__
