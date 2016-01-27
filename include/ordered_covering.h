@@ -58,8 +58,9 @@ static inline unsigned int oc_get_insertion_point(
 
 // Remove from a merge any entries which would be covered by being existing
 // entries if they were included in the given merge.
-static inline void oc_upcheck(merge_t *m, int min_goodness)
+static inline bool oc_upcheck(merge_t *m, int min_goodness)
 {
+  bool changed = false;  // Track whether we remove any entries
   // Get the point where the merge will be inserted into the table.
   unsigned int generality = keymask_count_xs(m->keymask);
   unsigned int insertion_index = oc_get_insertion_point(m->table, generality);
@@ -89,6 +90,7 @@ static inline void oc_upcheck(merge_t *m, int min_goodness)
       // recalculate the insertion index.
       if (keymask_intersect(km, other_km))
       {
+        changed = true;      // Indicate that the merge has changed
         merge_remove(m, i);  // Remove from the merge
         generality = keymask_count_xs(m->keymask);
         insertion_index = oc_get_insertion_point(m->table, generality);
@@ -100,8 +102,11 @@ static inline void oc_upcheck(merge_t *m, int min_goodness)
   // specified
   if (merge_goodness(m) <= min_goodness)
   {
+    changed = true;
     merge_clear(m);
   }
+
+  return changed;
 }
 
 
@@ -132,7 +137,73 @@ static inline void _get_settable(keymask_t merge_km, keymask_t covered_km,
     *set_to_zero |= this_set_to_zero;
     *set_to_one  |= this_set_to_one;
   }
+}
 
+
+typedef struct _sets_t
+{
+  bitset_t *best;
+  bitset_t *working;
+} __sets_t;
+
+
+static inline __sets_t _get_removables(
+  merge_t *m,         // Merge from which entries will be removed
+  uint32_t settable,  // Mask of bits to set
+  bool to_one,        // True if setting to one, otherwise false
+  __sets_t sets
+)
+{
+  // For each bit which we are trying to set
+  for (uint32_t bit = (1 << 31); bit > 0; bit >>= 1)
+  {
+    if (!(bit & settable))
+    {
+      // If this bit cannot be set we ignore it
+      continue;
+    }
+
+    // Loop through the table adding to the working set any entries with either
+    // a X or a 0 or 1 (as specified by `to_one`) to the working set of entries
+    // to remove.
+    unsigned int entry = 0;
+    for (unsigned int i = 0; i < m->table->size; i++)
+    {
+      // Skip if this isn't an entry
+      if (!merge_contains(m, i))
+      {
+        continue;
+      }
+
+      // See if this entry should be removed
+      keymask_t km = m->table->entries[i].keymask;
+      if (
+        bit & ~km.mask ||             // Entry has an X in this position
+        (!to_one && bit & km.key) ||  // Entry has a 1 in this position
+        (to_one && bit & ~km.key)     // Entry has a 0 in this position
+      )
+      {
+        bitset_add(sets.working, entry);  // NOTE: Indexing by position in merge!
+      }
+
+      entry++;  // Increment the index into the merge set
+    }
+
+    // If `working` contains fewer entries than `best` or `best` is empty swap
+    // `working and best`. Otherwise just empty the working set.
+    if (sets.best->count == 0 || sets.working->count < sets.best->count)
+    {
+      // Perform the swap
+      bitset_t *c = sets.best;
+      sets.best = sets.working;
+      sets.working = c;
+    }
+
+    // Clear the working merge
+    bitset_clear(sets.working);
+  }
+
+  return sets;
 }
 
 
@@ -141,67 +212,99 @@ static inline void _get_settable(keymask_t merge_km, keymask_t covered_km,
 static inline void oc_downcheck(merge_t *m, int min_goodness, aliases_t *a)
 {
   table_t *table = m->table;  // Retrieve the table
-  bool covered_entries = false;  // Record if there were any covered entries
-  unsigned int stringency = 33;  // Not at all stringent
-  uint32_t set_to_zero = 0x0;    // Mask of which bits could be set to zero
-  uint32_t set_to_one  = 0x0;    // Mask of which bits could be set to one
 
-  // Look at every entry between the insertion index and the end of the table
-  // to see if there are any entries which could be covered by the entry
-  // resulting from the merge.
-  unsigned int insertion_point = oc_get_insertion_point(
-      table, keymask_count_xs(m->keymask));
-  for (unsigned int i = insertion_point;
-       i < table->size && stringency > 0;
-       i++)
+  while (merge_goodness(m) > min_goodness)
   {
-    keymask_t km = table->entries[i].keymask;
-    if (keymask_intersect(km, m->keymask))
+    bool covered_entries = false;  // Record if there were any covered entries
+    unsigned int stringency = 33;  // Not at all stringent
+    uint32_t set_to_zero = 0x0;    // Mask of which bits could be set to zero
+    uint32_t set_to_one  = 0x0;    // Mask of which bits could be set to one
+
+    // Look at every entry between the insertion index and the end of the table
+    // to see if there are any entries which could be covered by the entry
+    // resulting from the merge.
+    unsigned int insertion_point = oc_get_insertion_point(
+        table, keymask_count_xs(m->keymask));
+    for (unsigned int i = insertion_point;
+         i < table->size && stringency > 0;
+         i++)
     {
-      if (!aliases_contains(a, km))
+      keymask_t km = table->entries[i].keymask;
+      if (keymask_intersect(km, m->keymask))
       {
-        // The entry doesn't contain any aliases so we need to avoid hitting
-        // the key that has just been identified.
-        covered_entries = true;
-        _get_settable(m->keymask, km, &stringency, &set_to_zero, &set_to_one);
-      }
-      else
-      {
-        // We need to avoid any keymasks contained within the alias table.
-        alias_list_t *l = aliases_find(a, km);
-        while (l != NULL)
+        if (!aliases_contains(a, km))
         {
-          for (unsigned int j = 0; j < l->n_elements; j++)
+          // The entry doesn't contain any aliases so we need to avoid hitting
+          // the key that has just been identified.
+          covered_entries = true;
+          _get_settable(m->keymask, km, &stringency, &set_to_zero, &set_to_one);
+        }
+        else
+        {
+          // We need to avoid any keymasks contained within the alias table.
+          alias_list_t *l = aliases_find(a, km);
+          while (l != NULL)
           {
-            km = alias_list_get(l, j);
-
-            if (keymask_intersect(km, m->keymask))
+            for (unsigned int j = 0; j < l->n_elements; j++)
             {
-              covered_entries = true;
-              _get_settable(m->keymask, km, &stringency,
-                            &set_to_zero, &set_to_one);
-            }
-          }
+              km = alias_list_get(l, j);
 
-          // Progress through the alias list
-          l = l->next;
+              if (keymask_intersect(km, m->keymask))
+              {
+                covered_entries = true;
+                _get_settable(m->keymask, km, &stringency,
+                              &set_to_zero, &set_to_one);
+              }
+            }
+
+            // Progress through the alias list
+            l = l->next;
+          }
         }
       }
     }
-  }
 
-  if (!covered_entries)
-  {
-    // If there were no covered entries then we needn't do anything
-    return;
-  }
+    if (!covered_entries)
+    {
+      // If there were no covered entries then we needn't do anything
+      return;
+    }
 
-  if (stringency == 0)
-  {
-    // We can't avoid a covered entry at all so we need to empty the merge
-    // entirely.
-    merge_clear(m);
-    return;
+    if (stringency == 0)
+    {
+      // We can't avoid a covered entry at all so we need to empty the merge
+      // entirely.
+      merge_clear(m);
+      return;
+    }
+
+    // Determine which entries could be removed from the merge and then pick
+    // the smallest number of entries to remove.
+    __sets_t sets = {MALLOC(sizeof(bitset_t)), MALLOC(sizeof(bitset_t))};
+    bitset_init(sets.best, m->entries.count);
+    bitset_init(sets.working, m->entries.count);
+
+    sets = _get_removables(m, set_to_zero, false, sets);
+    sets = _get_removables(m, set_to_one, true, sets);
+
+    // Remove the specified entries
+    unsigned int entry = 0;
+    for (unsigned int i = 0; i < m->table->size; i++)
+    {
+      if (merge_contains(m, i))
+      {
+        if (bitset_contains(sets.best, entry))
+        {
+          // Remove this entry from the merge
+          merge_remove(m, entry);
+        }
+        entry++;
+      }
+    }
+
+    // Tidy up
+    bitset_delete(sets.best); FREE(sets.best); sets.best=NULL;
+    bitset_delete(sets.working); FREE(sets.working); sets.working=NULL;
   }
 }
 

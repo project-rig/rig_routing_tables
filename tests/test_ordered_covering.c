@@ -101,7 +101,7 @@ START_TEST(test_oc_upcheck)
   merge_add(&m, 3);
   merge_add(&m, 4);
 
-  oc_upcheck(&m, 0);
+  ck_assert(oc_upcheck(&m, 0));
 
   // Check that entries were removed from the merge
   ck_assert(!merge_contains(&m, 0));
@@ -119,7 +119,7 @@ START_TEST(test_oc_upcheck)
   merge_add(&m, 1);
   merge_add(&m, 2);
 
-  oc_upcheck(&m, goodness);
+  ck_assert(oc_upcheck(&m, goodness));
 
   // Merge should be empty
   ck_assert(!merge_contains(&m, 0));
@@ -318,6 +318,47 @@ START_TEST(test_oc_downcheck_removes_one_entry_b)
 END_TEST
 
 
+START_TEST(test_oc_downcheck_iterates)
+{
+  // Check that if there are multiple covered entries the downcheck will remove
+  // sufficient entries from the merge to avoid covering both of them.
+  //
+  //   00000 -> N
+  //   00100 -> N
+  //   11000 -> N
+  //   11100 -> N
+  //   X0XXX -> NE
+  //   1XXXX -> E
+  entry_t entries[] = {
+    {{0b00000, 0b11111}, 0b100},
+    {{0b00100, 0b11111}, 0b100},
+    {{0b11000, 0b11111}, 0b100},
+    {{0b11100, 0b11111}, 0b100},
+    {{0b00000, 0b01000}, 0b010},
+    {{0b10000, 0b10000}, 0b001},
+  };
+  table_t table = {6, entries};
+
+  // Define the merge to attempt to merge the first 4 entries
+  merge_t m;
+  merge_init(&m, &table);
+  for (unsigned int i = 0; i < 4; i++)
+    merge_add(&m, i);
+
+  // Applying the downcheck should empty the merge
+  aliases_t aliases = aliases_init();
+  oc_downcheck(&m, 0, &aliases);
+
+  // Check that the merge is now empty
+  for (unsigned int i = 0; i < table.size; i++)
+    ck_assert(!merge_contains(&m, i));
+
+  // Tidy up
+  merge_delete(&m);
+}
+END_TEST
+
+
 START_TEST(test_merge_apply_at_beginning_of_table)
 {
   // Merge the first two entries:
@@ -500,6 +541,7 @@ Suite* ordered_covering_suite(void)
   tcase_add_test(tests, test_oc_downcheck_clears_merge_if_unresolvable);
   tcase_add_test(tests, test_oc_downcheck_removes_one_entry_a);
   tcase_add_test(tests, test_oc_downcheck_removes_one_entry_b);
+  tcase_add_test(tests, test_oc_downcheck_iterates);
 
   tcase_add_test(tests, test_merge_apply_at_beginning_of_table);
   tcase_add_test(tests, test_merge_apply_at_end_of_table);
