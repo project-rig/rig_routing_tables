@@ -9,7 +9,8 @@
 // Get the goodness for a merge
 static inline int merge_goodness(merge_t *m)
 {
-  return (33 - keymask_count_xs(m->keymask)) * (m->entries.count - 1);
+  return (33 - keymask_count_xs(m->keymask)) *
+         (33 - keymask_count_xs(m->keymask)) * (m->entries.count - 1);
 }
 
 
@@ -296,7 +297,7 @@ static inline void oc_downcheck(merge_t *m, int min_goodness, aliases_t *a)
         if (bitset_contains(sets.best, entry))
         {
           // Remove this entry from the merge
-          merge_remove(m, entry);
+          merge_remove(m, i);
         }
         entry++;
       }
