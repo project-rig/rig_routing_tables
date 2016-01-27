@@ -305,11 +305,16 @@ static inline void oc_downcheck(merge_t *m, int min_goodness, aliases_t *a)
     // Tidy up
     bitset_delete(sets.best); FREE(sets.best); sets.best=NULL;
     bitset_delete(sets.working); FREE(sets.working); sets.working=NULL;
+
+    // If the merge only contains 1 entry empty it entirely
+    if (m->entries.count == 1)
+    {
+      merge_clear(m);
+    }
   }
 }
 
 
-/*
 // Get the best merge which can be applied to a routing table
 static inline merge_t oc_get_best_merge(table_t* table, aliases_t *aliases)
 {
@@ -351,40 +356,25 @@ static inline merge_t oc_get_best_merge(table_t* table, aliases_t *aliases)
       }
     }
 
-    // If the working merge is better than the current best merge then continue
-    // to refine it until it is valid.
-    if (merge_goodness(best) < merge_goodness(working))
+    // Perform the first downcheck
+    oc_downcheck(&working, 1, aliases);
+
+    // Perform the upcheck, seeing if this actually makes a change to the
+    // size of the merge.
+    if (oc_upcheck(&working, 1))
     {
-      // Perform the first downcheck
-      oc_downcheck(&working, merge_goodness(best), aliases);
+      // If the upcheck did make a change then the downcheck needs to be run
+      // again.
+      oc_downcheck(&working, 1, aliases);
+    }
 
-      // If the working merge is still better than the current best merge then
-      // continue to refine it.
-      if (merge_goodness(best) < merge_goodness(working))
-      {
-        // Perform the upcheck, seeing if this actually makes a change to the
-        // size of the merge.
-        unsigned int before = working.entries.count;
-        oc_upcheck(&working, merge_goodness(best));
-        bool changed = (before != working.entries.count);
-
-        // If the merge is still better than the current best merge AND the
-        // number of entries was changed by the upcheck we need to perform
-        // another downcheck.
-        if (merge_goodness(best) < merge_goodness(working) && changed)
-        {
-          oc_downcheck(&working, merge_goodness(best), aliases);
-        }
-
-        // If the merge is still better than the current best merge we swap the
-        // current and best merges to record the new best merge.
-        if (merge_goodness(best) < merge_goodness(working))
-        {
-          merge_t other = working;
-          working = best;
-          best = other;
-        }
-      }
+    // If the merge is still better than the current best merge we swap the
+    // current and best merges to record the new best merge.
+    if (merge_goodness(&best) < merge_goodness(&working))
+    {
+      merge_t other = working;
+      working = best;
+      best = other;
     }
   }
 
@@ -395,7 +385,6 @@ static inline merge_t oc_get_best_merge(table_t* table, aliases_t *aliases)
   // Return the best merge
   return best;
 }
-*/
 
 
 // Apply a merge to the table against which it is defined
@@ -474,7 +463,6 @@ static inline void oc_merge_apply(merge_t *m, aliases_t *aliases)
 }
 
 
-/*
 // Apply the ordered covering algorithm to a routing table
 // Minimise the table until either the table is shorter than the target length
 // or no more merges are possible.
@@ -486,7 +474,7 @@ static inline void oc_minimise(
 {
   while (table->size > target_length)
   {
-    // Get the best possible merge, if this merge is no good then break out of
+    // Get the best possible merge, if this merge is empty then break out of
     // the loop.
     merge_t merge = oc_get_best_merge(table, aliases);
     unsigned int count = merge.entries.count;
@@ -509,7 +497,6 @@ static inline void oc_minimise(
     }
   }
 }
-*/
 
 
 #define __ORDERED_COVERING_H__

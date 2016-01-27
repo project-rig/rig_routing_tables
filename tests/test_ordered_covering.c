@@ -522,6 +522,233 @@ START_TEST(test_merge_apply_at_end_of_table)
 END_TEST
 
 
+START_TEST(test_get_best_merge_applies_downcheck)
+{
+  // Test that a downcheck is applied and an invalid merge is avoided.
+  //
+  //    00000000 -> E
+  //    00010000 -> E
+  //    00100000 -> E
+  //    10000000 -> E
+  //    11110000 -> E
+  //    1XXXXXXX -> N
+  entry_t entries[] = {
+    {{0x00, 0xff}, 0b001},
+    {{0x10, 0xff}, 0b001},
+    {{0x20, 0xff}, 0b001},
+    {{0x80, 0xff}, 0b001},
+    {{0xf0, 0xff}, 0b001},
+    {{0x80, 0x80}, 0b100},
+  };
+  table_t table = {6, entries};
+
+  // Create an empty aliases table
+  aliases_t aliases = aliases_init();
+
+  // Check that a valid merge is returned
+  merge_t merge = oc_get_best_merge(&table, &aliases);
+
+  ck_assert(merge_contains(&merge, 0));
+  ck_assert(merge_contains(&merge, 1));
+  ck_assert(merge_contains(&merge, 2));
+  ck_assert(!merge_contains(&merge, 3));
+  ck_assert(!merge_contains(&merge, 4));
+  ck_assert(!merge_contains(&merge, 5));
+
+  // Tidy up
+  merge_delete(&merge);
+}
+END_TEST
+
+
+START_TEST(test_get_best_merge_applies_upcheck)
+{
+  // Test that an upcheck is applied and an invalid merge is avoided.
+  //
+  // 0000 -> E
+  // 0001 -> E
+  // 0010 -> E
+  // 1000 -> E
+  // 1111 -> E
+  // 1XXX -> N
+  entry_t entries[] = {
+    {{0x0, 0xf}, 0b001},
+    {{0x1, 0xf}, 0b001},
+    {{0x2, 0xf}, 0b001},
+    {{0x8, 0xf}, 0b001},
+    {{0xf, 0xf}, 0b001},
+    {{0x8, 0x8}, 0b100},
+  };
+  table_t table = {6, entries};
+
+  // Create an empty aliases table
+  aliases_t aliases = aliases_init();
+
+  // Check that a valid merge is returned
+  merge_t merge = oc_get_best_merge(&table, &aliases);
+
+  ck_assert(merge_contains(&merge, 0));
+  ck_assert(merge_contains(&merge, 1));
+  ck_assert(merge_contains(&merge, 2));
+  ck_assert(!merge_contains(&merge, 3));
+  ck_assert(!merge_contains(&merge, 4));
+  ck_assert(!merge_contains(&merge, 5));
+
+  // Tidy up
+  merge_delete(&merge);
+}
+END_TEST
+
+
+START_TEST(test_get_best_merge_applies_second_downcheck)
+{
+  // Test that a down-check is re-applied after a resolved up-check.
+  //
+  //   00000000 -> N
+  //   00011111 -> N
+  //   11100000 -> N
+  //   1110000X -> E
+  //   XXX01XXX -> NE
+  //
+  // We expect only the first two entries to be contained within the merge.
+  entry_t entries[] = {
+    {{0x00, 0xff}, 0b100},
+    {{0x1f, 0xff}, 0b100},
+    {{0xe0, 0xff}, 0b100},
+    {{0xe0, 0xfe}, 0b001},
+    {{0x08, 0x18}, 0b010},
+  };
+  table_t table = {5, entries};
+
+  // Create an empty aliases table
+  aliases_t aliases = aliases_init();
+
+  // There should be no merge because there is no valid merge
+  merge_t merge = oc_get_best_merge(&table, &aliases);
+
+  ck_assert(!merge_contains(&merge, 0));
+  ck_assert(!merge_contains(&merge, 1));
+  ck_assert(!merge_contains(&merge, 2));
+  ck_assert(!merge_contains(&merge, 3));
+  ck_assert(!merge_contains(&merge, 4));
+
+  // Tidy up
+  merge_delete(&merge);
+}
+END_TEST
+
+
+START_TEST(test_ordered_covering_full)
+{
+  // Test that the given table is minimised correctly:
+  //
+  //   0000 -> N NE
+  //   0001 -> E
+  //   0101 -> SW
+  //   1000 -> N NE
+  //   1001 -> E
+  //   1110 -> SW
+  //   1100 -> N NE
+  //   0100 -> S SW
+  //
+  // The result (worked out by hand) should be:
+  //
+  //   0100 -> S SW
+  //   X001 -> E
+  //   XX00 -> N NE
+  //   X1XX -> SW 
+  entry_t entries[] = {
+    {{0b0000, 0xf}, 0b000110},
+    {{0b0001, 0xf}, 0b000001},
+    {{0b0101, 0xf}, 0b010000},
+    {{0b1000, 0xf}, 0b000110},
+    {{0b1001, 0xf}, 0b000001},
+    {{0b1110, 0xf}, 0b010000},
+    {{0b1100, 0xf}, 0b000110},
+    {{0b0100, 0xf}, 0b110000}
+  };
+  table_t table = {8, entries};
+
+  // Create an empty aliases table
+  aliases_t aliases = aliases_init();
+
+  // Minimise!
+  oc_minimise(&table, 0, &aliases);
+
+  // Check the returned table
+  ck_assert_int_eq(table.size, 4);
+
+  // Check each entry
+  ck_assert_int_eq(table.entries[0].keymask.key, 0b0100);
+  ck_assert_int_eq(table.entries[0].keymask.mask, 0b1111);
+  ck_assert_int_eq(table.entries[0].route, 0b110000);
+
+  ck_assert_int_eq(table.entries[1].keymask.key, 0b0001);
+  ck_assert_int_eq(table.entries[1].keymask.mask, 0b0111);
+  ck_assert_int_eq(table.entries[1].route, 0b000001);
+
+  ck_assert_int_eq(table.entries[2].keymask.key, 0b0000);
+  ck_assert_int_eq(table.entries[2].keymask.mask, 0b0011);
+  ck_assert_int_eq(table.entries[2].route, 0b000110);
+
+  ck_assert_int_eq(table.entries[3].keymask.key, 0b0100);
+  ck_assert_int_eq(table.entries[3].keymask.mask, 0b0100);
+  ck_assert_int_eq(table.entries[3].route, 0b010000);
+
+  // Tidy up (remove all entries from the aliases list)
+  for (unsigned int i = 0; i < table.size; i++)
+  {
+    keymask_t km = table.entries[i].keymask;
+    if (aliases_contains(&aliases, km))
+    {
+      alias_list_delete((alias_list_t *) aliases_find(&aliases, km));
+      aliases_remove(&aliases, km);
+    }
+  }
+}
+END_TEST
+
+
+START_TEST(test_ordered_covering_terminates_early)
+{
+  entry_t entries[] = {
+    {{0b0000, 0xf}, 0b000110},
+    {{0b0001, 0xf}, 0b000001},
+    {{0b0101, 0xf}, 0b010000},
+    {{0b1000, 0xf}, 0b000110},
+    {{0b1001, 0xf}, 0b000001},
+    {{0b1110, 0xf}, 0b010000},
+    {{0b1100, 0xf}, 0b000110},
+    {{0b0100, 0xf}, 0b110000}
+  };
+  table_t table = {8, entries};
+
+  // Create an empty aliases table
+  aliases_t aliases = aliases_init();
+
+  // No minimisation because the table is already sufficiently small
+  oc_minimise(&table, 1024, &aliases);
+  ck_assert_int_eq(table.size, 8);
+
+  // Some minimisation
+  oc_minimise(&table, 7, &aliases);
+  ck_assert_int_le(table.size, 7);
+  ck_assert_int_gt(table.size, 4);
+
+  // Tidy up (remove all entries from the aliases list)
+  for (unsigned int i = 0; i < table.size; i++)
+  {
+    keymask_t km = table.entries[i].keymask;
+    if (aliases_contains(&aliases, km))
+    {
+      alias_list_delete((alias_list_t *) aliases_find(&aliases, km));
+      aliases_remove(&aliases, km);
+    }
+  }
+}
+END_TEST
+
+
 Suite* ordered_covering_suite(void)
 {
   Suite *s;
@@ -545,6 +772,13 @@ Suite* ordered_covering_suite(void)
 
   tcase_add_test(tests, test_merge_apply_at_beginning_of_table);
   tcase_add_test(tests, test_merge_apply_at_end_of_table);
+
+  tcase_add_test(tests, test_get_best_merge_applies_downcheck);
+  tcase_add_test(tests, test_get_best_merge_applies_upcheck);
+  tcase_add_test(tests, test_get_best_merge_applies_second_downcheck);
+
+  tcase_add_test(tests, test_ordered_covering_full);
+  tcase_add_test(tests, test_ordered_covering_terminates_early);
 
   return s;
 }
