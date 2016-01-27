@@ -62,23 +62,32 @@ if __name__ == "__main__":
     ]
 
     # Talk to the machine
-    mc = MachineController("192.168.240.253")
+    mc = MachineController("192.168.1.1")
+    mc.send_signal("stop")
 
     # Write the table table into memory on chip (0, 0)
+    print("Loading tables...")
     with mc(x=0, y=0):
-        mem = mc.sdram_alloc_as_filelike(len(table)*12 + 8)
-        mem.write(pack_table(table), 0)
+        mem = mc.sdram_alloc_as_filelike(len(table)*12 + 8, tag=1)
+        mem.write(pack_table(table, 0))
 
     # Load the application
-    mc.load_application("./ordered_covering.aplc", {(0, 0): {1}})
+    print("Loading app...")
+    mc.load_application("./ordered_covering.aplx", {(0, 0): {1}})
 
     # Wait until this does something interesting
+    print("Minimising...")
     ready = mc.wait_for_cores_to_reach_state("exit", 1, timeout=5.0)
     if ready < 1:
         raise Exception("Something didn't work...")
 
     # Read back the table
+    print("Reading back table...")
     mem.seek(0)
     new_table = unpack_table(mem.read())
 
-    print(new_table)
+    print("\n---")
+    for entry in new_table:
+        print("{!s}".format(entry))
+    print("---\n")
+    mc.send_signal("stop")
