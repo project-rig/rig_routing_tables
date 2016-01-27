@@ -1,7 +1,18 @@
 #ifndef __PLATFORM_H__
 
 #ifdef SPINNAKER
-  #define MALLOC spin1_malloc
+
+void * safe_malloc(uint bytes)
+{
+  void* p = spin1_malloc(bytes);
+  if (p == NULL)
+  {
+    rt_error(RTE_MALLOC);
+  }
+  return p;
+}
+
+  #define MALLOC safe_malloc
   #define FREE   sark_free
 #else
   #include <stdlib.h>
