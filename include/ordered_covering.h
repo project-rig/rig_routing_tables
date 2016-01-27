@@ -9,8 +9,7 @@
 // Get the goodness for a merge
 static inline int merge_goodness(merge_t *m)
 {
-  return (33 - keymask_count_xs(m->keymask)) *
-         (33 - keymask_count_xs(m->keymask)) * (m->entries.count - 1);
+  return m->entries.count - 1;
 }
 
 
@@ -61,6 +60,7 @@ static inline unsigned int oc_get_insertion_point(
 // entries if they were included in the given merge.
 static inline bool oc_upcheck(merge_t *m, int min_goodness)
 {
+  min_goodness = (min_goodness > 0) ? min_goodness : 0;
   bool changed = false;  // Track whether we remove any entries
   // Get the point where the merge will be inserted into the table.
   unsigned int generality = keymask_count_xs(m->keymask);
@@ -212,6 +212,7 @@ static inline __sets_t _get_removables(
 // entries positioned below the merge.
 static inline void oc_downcheck(merge_t *m, int min_goodness, aliases_t *a)
 {
+  min_goodness = (min_goodness > 0) ? min_goodness : 0;
   table_t *table = m->table;  // Retrieve the table
 
   while (merge_goodness(m) > min_goodness)
@@ -357,16 +358,31 @@ static inline merge_t oc_get_best_merge(table_t* table, aliases_t *aliases)
       }
     }
 
+    if (merge_goodness(&working) <= merge_goodness(&best))
+    {
+      continue;
+    }
+
     // Perform the first downcheck
-    oc_downcheck(&working, 1, aliases);
+    oc_downcheck(&working, merge_goodness(&best), aliases);
+
+    if (merge_goodness(&working) <= merge_goodness(&best))
+    {
+      continue;
+    }
 
     // Perform the upcheck, seeing if this actually makes a change to the
     // size of the merge.
-    if (oc_upcheck(&working, 1))
+    if (oc_upcheck(&working, merge_goodness(&best)))
     {
+      if (merge_goodness(&working) <= merge_goodness(&best))
+      {
+        continue;
+      }
+
       // If the upcheck did make a change then the downcheck needs to be run
       // again.
-      oc_downcheck(&working, 1, aliases);
+      oc_downcheck(&working, merge_goodness(&best), aliases);
     }
 
     // If the merge is still better than the current best merge we swap the
