@@ -155,8 +155,9 @@ static inline __sets_t _get_removables(
   __sets_t sets
 )
 {
-  // For each bit which we are trying to set
-  for (uint32_t bit = (1 << 31); bit > 0; bit >>= 1)
+  // For each bit which we are trying to set while the best set doesn't contain
+  // only one entry.
+  for (uint32_t bit = (1 << 31); bit > 0 && sets.best->count != 1; bit >>= 1)
   {
     if (!(bit & settable))
     {
