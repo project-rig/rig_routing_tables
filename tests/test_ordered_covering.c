@@ -317,6 +317,52 @@ START_TEST(test_oc_downcheck_removes_one_entry_b)
 END_TEST
 
 
+START_TEST(test_oc_downcheck_removes_one_entry_c)
+{
+  // Test the first entry is removed from the merge for the following table:
+  //
+  //     0000 -> E
+  //     1000 -> E
+  //     1001 -> E
+  //     1XXX -> N {1001}
+  entry_t entries[] = {
+    {{0b0000, 0xf}, 0b001},
+    {{0b1000, 0xf}, 0b001},
+    {{0b1001, 0xf}, 0b001},
+    {{0b0000, 0x8}, 0b100},
+  };
+  table_t table = {4, entries};
+
+  // Define the merge
+  merge_t m;
+  merge_init(&m, &table);
+  merge_add(&m, 0);
+  merge_add(&m, 1);
+  merge_add(&m, 2);
+
+  // Create the aliases table
+  aliases_t aliases = aliases_init();
+  alias_list_t *al1 = alias_list_new(1);
+  keymask_t km = {0x9, 0xf};
+  alias_list_append(al1, km);
+
+  aliases_insert(&aliases, table.entries[3].keymask, al1);
+
+  // Check that the third entry is removed
+  oc_downcheck(&m, 0, &aliases);
+
+  ck_assert(merge_contains(&m, 0));
+  ck_assert(merge_contains(&m, 1));
+  ck_assert(!merge_contains(&m, 2));  // Removed from the merge
+  ck_assert(!merge_contains(&m, 3));  // Never part of the merge
+
+  // Tidy up
+  merge_delete(&m);
+  aliases_clear(&aliases);
+}
+END_TEST
+
+
 START_TEST(test_oc_downcheck_iterates)
 {
   // Check that if there are multiple covered entries the downcheck will remove
@@ -749,6 +795,7 @@ Suite* ordered_covering_suite(void)
   tcase_add_test(tests, test_oc_downcheck_clears_merge_if_unresolvable);
   tcase_add_test(tests, test_oc_downcheck_removes_one_entry_a);
   tcase_add_test(tests, test_oc_downcheck_removes_one_entry_b);
+  tcase_add_test(tests, test_oc_downcheck_removes_one_entry_c);
   tcase_add_test(tests, test_oc_downcheck_iterates);
 
   tcase_add_test(tests, test_merge_apply_at_beginning_of_table);
