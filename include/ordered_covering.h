@@ -424,7 +424,7 @@ static inline void oc_merge_apply(merge_t *m, aliases_t *aliases)
   // Create a new aliases list with sufficient space for the keymasks of all of
   // the entries in the merge.
   alias_list_t *new_aliases = alias_list_new(m->entries.count);
-  aliases_insert(aliases, new_entry.keymask, (void *) new_aliases);
+  aliases_insert(aliases, new_entry.keymask, new_aliases);
 
   // Use two iterators to move through the table copying entries from one
   // position to the other as required.

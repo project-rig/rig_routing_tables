@@ -179,7 +179,6 @@ START_TEST(test_oc_downcheck_does_nothing)
 
   // Tidy up
   merge_delete(&m);
-  alias_list_delete(l1);
   aliases_clear(&aliases);
 }
 END_TEST
@@ -428,7 +427,6 @@ START_TEST(test_merge_apply_at_beginning_of_table)
 
   // Tidy up
   merge_delete(&m);
-  alias_list_delete(l);
   aliases_clear(&aliases);
 }
 END_TEST
@@ -516,7 +514,6 @@ START_TEST(test_merge_apply_at_end_of_table)
 
   // Tidy up
   merge_delete(&m);
-  alias_list_delete(l);
   aliases_clear(&aliases);
 }
 END_TEST
@@ -696,15 +693,7 @@ START_TEST(test_ordered_covering_full)
   ck_assert_int_eq(table.entries[3].route, 0b010000);
 
   // Tidy up (remove all entries from the aliases list)
-  for (unsigned int i = 0; i < table.size; i++)
-  {
-    keymask_t km = table.entries[i].keymask;
-    if (aliases_contains(&aliases, km))
-    {
-      alias_list_delete((alias_list_t *) aliases_find(&aliases, km));
-      aliases_remove(&aliases, km);
-    }
-  }
+  aliases_clear(&aliases);
 }
 END_TEST
 
@@ -736,15 +725,7 @@ START_TEST(test_ordered_covering_terminates_early)
   ck_assert_int_gt(table.size, 4);
 
   // Tidy up (remove all entries from the aliases list)
-  for (unsigned int i = 0; i < table.size; i++)
-  {
-    keymask_t km = table.entries[i].keymask;
-    if (aliases_contains(&aliases, km))
-    {
-      alias_list_delete((alias_list_t *) aliases_find(&aliases, km));
-      aliases_remove(&aliases, km);
-    }
-  }
+  aliases_clear(&aliases);
 }
 END_TEST
 

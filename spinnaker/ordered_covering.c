@@ -53,13 +53,5 @@ void c_main(void)
                sizeof(entry_t) * table.size);
 
   // Clean up the memory used by the aliases table
-  for (unsigned int i = 0; i < table.size; i++)
-  {
-    keymask_t km = table.entries[i].keymask;
-    if (aliases_contains(&aliases, km))
-    {
-      alias_list_delete((alias_list_t *) aliases_find(&aliases, km));
-      aliases_remove(&aliases, km);
-    }
-  }
+  aliases_clear(&aliases);
 }

@@ -6,3 +6,4 @@ tests/tests
 *.swp
 *.aplx
 *.elf
+spinnaker/sark_build.c
