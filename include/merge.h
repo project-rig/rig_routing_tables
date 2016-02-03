@@ -100,10 +100,10 @@ static inline void merge_remove(merge_t* m, unsigned int i)
     for (unsigned int j = 0; j < m->table->size; j++)
     {
       entry_t e = m->table->entries[j];
-      m->route |= e.route;
 
       if (bitset_contains(&(m->entries), j))
       {
+        m->route |= e.route;
         if (m->keymask.key  == 0xffffffff && m->keymask.mask == 0x00000000)
         {
           // Initialise the keymask

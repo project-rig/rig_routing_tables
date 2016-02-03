@@ -6,30 +6,14 @@
 START_TEST(test_merge_lifecycle)
 {
   // Create a routing table from which we'll build merges
-  table_t table;
-  table.size = 4;
-  entry_t entries[4];
-  table.entries = entries;
-
-  // 0000 -> E
-  entries[0].keymask.key = 0x0;
-  entries[0].keymask.mask = 0xf;
-  entries[0].route = 0x1;
-
-  // 0001 -> E
-  entries[1].keymask.key = 0x1;
-  entries[1].keymask.mask = 0xf;
-  entries[1].route = 0x1;
-
-  // 0010 -> E
-  entries[2].keymask.key = 0x2;
-  entries[2].keymask.mask = 0xf;
-  entries[2].route = 0x1;
-
-  // 0110 -> E
-  entries[3].keymask.key = 0x6;
-  entries[3].keymask.mask = 0xf;
-  entries[3].route = 0x1;
+  entry_t entries[] = {
+    {{0x0, 0xf}, 0b001},
+    {{0x1, 0xf}, 0b001},
+    {{0x2, 0xf}, 0b001},
+    {{0x6, 0xf}, 0b001},
+    {{0x0, 0x0}, 0b111},
+  };
+  table_t table = {5, entries};
 
   // Create a new merge based around the above table
   merge_t m;
@@ -47,12 +31,14 @@ START_TEST(test_merge_lifecycle)
   merge_add(&m, 2);
   ck_assert_int_eq(m.keymask.key, 0x2);
   ck_assert_int_eq(m.keymask.mask, 0xf);
+  ck_assert_int_eq(m.route, 0x1);
 
   // Add another entry to a merge and then check that the resultant key-mask is
   // correct.
   merge_add(&m, 3);
   ck_assert_int_eq(m.keymask.key,  0b0010);
   ck_assert_int_eq(m.keymask.mask, 0b1011);
+  ck_assert_int_eq(m.route, 0x1);
 
   ck_assert(!merge_contains(&m, 0));
   ck_assert(!merge_contains(&m, 1));
@@ -63,20 +49,24 @@ START_TEST(test_merge_lifecycle)
   merge_add(&m, 1);
   ck_assert_int_eq(m.keymask.key,  0b0000);
   ck_assert_int_eq(m.keymask.mask, 0b1000);
+  ck_assert_int_eq(m.route, 0x1);
 
   // Remove an entry from the table and ensure that the keymask is recalculated
-  // correctly.
+  // correctly and that the route is correct.
   merge_remove(&m, 3);  // Merge is now a merge of 0010 and 0001
   ck_assert_int_eq(m.keymask.key,  0b0000);
   ck_assert_int_eq(m.keymask.mask, 0b1100);
+  ck_assert_int_eq(m.route, 0x1);
 
   merge_remove(&m, 2);  // Merge is now a merge of only 0001
   ck_assert_int_eq(m.keymask.key,  0b0001);
   ck_assert_int_eq(m.keymask.mask, 0b1111);
+  ck_assert_int_eq(m.route, 0x1);
 
   merge_remove(&m, 1);  // Merge is now empty
   ck_assert_int_eq(m.keymask.key,  0xffffffff);
   ck_assert_int_eq(m.keymask.mask, 0x00000000);
+  ck_assert_int_eq(m.route, 0x0);
 
   // Delete the merge
   merge_delete(&m);
