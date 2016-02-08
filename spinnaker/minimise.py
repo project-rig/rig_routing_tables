@@ -6,6 +6,39 @@ from rig.routing_table import RoutingTableEntry, Routes
 import struct
 
 
+def get_memory_profile(mc):
+    """Return the cumulative heap usage over time."""
+    # Keep a track of how much memory is associated with each pointer,
+    # track cumulative memory usage over time
+    usage = [0]
+    pointers = dict()
+
+    # Read the linked list of entry arrays
+    buf = mc.read_vcpu_struct_field("user0")
+    while buf != 0x0:
+        # Unpack the header
+        n_entries, buf_next = struct.unpack("<2I", mc.read(buf, 8))
+        buf += 8
+
+        # Read in the memory recording entries
+        for _ in range(n_entries):
+            n_bytes, ptr = struct.unpack("<2I", mc.read(buf, 8))
+            buf += 8
+
+            if n_bytes == 0:
+                # This is a free
+                usage.append(usage[-1] - pointers.pop(ptr))
+            else:
+                # This is an allocation
+                usage.append(usage[-1] + n_bytes)
+                pointers[ptr] = n_bytes
+
+        # Progress to the next block of memory
+        buf = buf_next
+
+    return usage
+
+
 def pack_table(table, target_length):
     """Pack a routing table into the form required for dumping into SDRAM."""
     data = bytearray(2*4 + len(table)*3*4)
@@ -38,7 +71,7 @@ def unpack_table(data):
     length, _ = struct.unpack_from("<2I", data)
 
     # Unpack the table
-    table = [None for _ in range(length)]
+    table = [None for __ in range(length)]
     for i in range(length):
         key, mask, route = struct.unpack_from("<3I", data, i*12 + 8)
         routes = {r for r in Routes if (1 << r) & route}
@@ -73,7 +106,7 @@ if __name__ == "__main__":
 
     # Load the application
     print("Loading app...")
-    mc.load_application("./ordered_covering.aplx", {(0, 0): {1}})
+    mc.load_application("./ordered_covering_profiled.aplx", {(0, 0): {1}})
 
     # Wait until this does something interesting
     print("Minimising...")
@@ -90,4 +123,9 @@ if __name__ == "__main__":
     for entry in new_table:
         print("{!s}".format(entry))
     print("---\n")
+
+    # Read back the memory profile
+    print("Reading back memory profile...")
+    with mc(x=0, y=0, p=1):
+        get_memory_profile(mc)
     mc.send_signal("stop")

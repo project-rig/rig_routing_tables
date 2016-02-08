@@ -1,0 +1,5 @@
+SOURCES=ordered_covering.c
+APP=ordered_covering
+BUILDDIR=build/standard
+
+include Makefile.common

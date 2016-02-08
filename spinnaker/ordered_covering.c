@@ -7,7 +7,6 @@
  *
  * When finished will overwrite the routing table in SDRAM with the new table.
  */
-#define SPINNAKER
 #include "spin1_api.h"
 #include "ordered_covering.h"
 
@@ -35,6 +34,11 @@ void c_main(void)
   table_t table;
   table.size = sdram_table[0];
   uint32_t target_length = sdram_table[1];
+
+  // Prepare the memory profiling if desired
+#ifdef PROFILED
+  profile_init();
+#endif
 
   // Copy in the original table
   table.entries = MALLOC(table.size * sizeof(entry_t));
