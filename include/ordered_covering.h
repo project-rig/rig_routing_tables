@@ -20,18 +20,19 @@ static inline unsigned int oc_get_insertion_point(
   const unsigned int generality
 )
 {
-  // Perform a binary search of the table to find entries of similar generality
+  // Perform a binary search of the table to find entries of generality - 1
+  const unsigned int g_m_1 = generality - 1;
   unsigned int bottom = 0;
   unsigned int top = table->size;
   unsigned int pos = top / 2;
 
   while (bottom < pos && pos < top &&
-         keymask_count_xs(table->entries[pos].keymask) != generality)
+         keymask_count_xs(table->entries[pos].keymask) != g_m_1)
   {
     unsigned int entry_generality = \
       keymask_count_xs(table->entries[pos].keymask);
 
-    if (entry_generality < generality)
+    if (entry_generality < g_m_1)
     {
       bottom = pos;
     }
@@ -47,7 +48,7 @@ static inline unsigned int oc_get_insertion_point(
   // Iterate through the table until either the next generality or the end of
   // the table is found.
   while (pos < table->size &&
-         keymask_count_xs(table->entries[pos].keymask) <= generality)
+         keymask_count_xs(table->entries[pos].keymask) < generality)
   {
     pos++;
   }

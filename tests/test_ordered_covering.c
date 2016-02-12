@@ -9,15 +9,12 @@
 START_TEST(test_get_insertion_point_at_beginning_of_table)
 {
   // Create a routing table with only generality 31 entries
-  entry_t entries[4];
-  entries[0].keymask.key = 0b00;
-  entries[0].keymask.mask = 0b01;
-  entries[1].keymask.key = 0b01;
-  entries[1].keymask.mask = 0b01;
-  entries[2].keymask.key = 0b00;
-  entries[2].keymask.mask = 0b10;
-  entries[3].keymask.key = 0b10;
-  entries[3].keymask.mask = 0b10;
+  entry_t entries[] = {
+    {{0b00, 0b01}, 0},  // X0
+    {{0b01, 0b01}, 0},  // X1
+    {{0b00, 0b10}, 0},  // 0X
+    {{0b10, 0b10}, 0},  // 1X
+  };
   table_t table = {4, entries};
 
   // A generality 30 entry should be inserted at the beginning of the table.
@@ -29,21 +26,17 @@ END_TEST
 START_TEST(test_get_insertion_point_after_same_generality)
 {
   // Create a routing table with only generality 30 and 31 entries
-  entry_t entries[5];
-  entries[0].keymask.key = 0b00;
-  entries[0].keymask.mask = 0b11;
-  entries[1].keymask.key = 0b00;
-  entries[1].keymask.mask = 0b01;
-  entries[2].keymask.key = 0b01;
-  entries[2].keymask.mask = 0b01;
-  entries[3].keymask.key = 0b00;
-  entries[3].keymask.mask = 0b10;
-  entries[4].keymask.key = 0b10;
-  entries[4].keymask.mask = 0b10;
+  entry_t entries[] = {
+    {{0b00, 0b11}, 0},  // 00
+    {{0b00, 0b01}, 0},  // X0
+    {{0b01, 0b01}, 0},  // X1
+    {{0b00, 0b10}, 0},  // 0X
+    {{0b10, 0b10}, 0},  // 1X
+  };
   table_t table = {5, entries};
 
-  // A generality 30 entry should be inserted after the 1 generality 30 entry
-  ck_assert_int_eq(oc_get_insertion_point(&table, 30), 1);
+  // A generality 30 entry should be inserted before the generality 30 entry
+  ck_assert_int_eq(oc_get_insertion_point(&table, 30), 0);
 }
 END_TEST
 
@@ -51,21 +44,20 @@ END_TEST
 START_TEST(test_get_insertion_point_at_end_of_table)
 {
   // Create a routing table with only generality 30 and 31 entries
-  entry_t entries[5];
-  entries[1].keymask.key = 0b00;
-  entries[1].keymask.mask = 0b11;
-  entries[1].keymask.key = 0b00;
-  entries[1].keymask.mask = 0b01;
-  entries[2].keymask.key = 0b01;
-  entries[2].keymask.mask = 0b01;
-  entries[3].keymask.key = 0b00;
-  entries[3].keymask.mask = 0b10;
-  entries[4].keymask.key = 0b10;
-  entries[4].keymask.mask = 0b10;
+  entry_t entries[] = {
+    {{0b00, 0b11}, 0},  // 00
+    {{0b00, 0b01}, 0},  // X0
+    {{0b01, 0b01}, 0},  // X1
+    {{0b00, 0b10}, 0},  // 0X
+    {{0b10, 0b10}, 0},  // 1X
+  };
   table_t table = {5, entries};
 
-  // Generality 31 and 32 entries should be inserted at the end of the table
-  ck_assert_int_eq(oc_get_insertion_point(&table, 31), 5);
+  // Generality 31 entries should be inserted before the existing generality 31
+  // entries.
+  ck_assert_int_eq(oc_get_insertion_point(&table, 31), 1);
+
+  // Generality 32 entries should be inserted at the end of the table
   ck_assert_int_eq(oc_get_insertion_point(&table, 32), 5);
 }
 END_TEST
