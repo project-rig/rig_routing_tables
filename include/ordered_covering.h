@@ -431,6 +431,9 @@ static inline void oc_merge_apply(merge_t *m, aliases_t *aliases)
   unsigned int insert = 0;
   for (unsigned int remove = 0; remove < table->size; remove++)
   {
+    // Grab the current entry before we possibly overwrite it
+    entry_t current = table->entries[remove];
+
     // Insert the new entry if this is the correct position at which to do so
     if (remove == insertion_point)
     {
@@ -442,7 +445,7 @@ static inline void oc_merge_apply(merge_t *m, aliases_t *aliases)
     {
       // If this entry is not contained within the merge then copy it from its
       // current position to its new position.
-      table->entries[insert] = table->entries[remove];
+      table->entries[insert] = current;
       insert++;
     }
     else
