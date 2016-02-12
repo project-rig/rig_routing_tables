@@ -20,6 +20,29 @@ typedef struct _fentry
 } fentry_t;
 
 
+// Routing table entry comparison method
+int entry_cmp(const void *a, const void *b)
+{
+  // Get the generalities
+  const unsigned int gen_a = keymask_count_xs(((entry_t *) a)->keymask);
+  const unsigned int gen_b = keymask_count_xs(((entry_t *) b)->keymask);
+
+  // Compare
+  if (gen_a < gen_b)
+  {
+    return -1;
+  }
+  else if (gen_a == gen_b)
+  {
+    return 0;
+  }
+  else
+  {
+    return 1;
+  }
+}
+
+
 void minimise(table_t *table, unsigned int target_length)
 {
   // Create an empty aliases table
@@ -99,6 +122,9 @@ int main(int argc, char *argv[])
       table.entries[i].keymask.mask = t.mask;
       table.entries[i].route = t.route;
     }
+
+    // Sort the table
+    qsort(table.entries, table.size, sizeof(entry_t), entry_cmp);
 
     // Perform the minimisation
     minimise(&table, target_length);
