@@ -759,8 +759,8 @@ START_TEST(test_ordered_covering_terminates_early)
 
   // Some minimisation
   oc_minimise(&table, 7, &aliases);
-  ck_assert_int_le(table.size, 7);
-  ck_assert_int_gt(table.size, 4);
+  ck_assert(table.size <= 7);
+  ck_assert(table.size > 4);
 
   // Tidy up (remove all entries from the aliases list)
   aliases_clear(&aliases);

@@ -1,0 +1,18 @@
+sudo: false
+language: c
+
+addons:
+  apt:
+    packages:
+      - check
+      - valgrind
+
+script:
+        - cd ./tests
+        - make coverage
+
+after_success:
+          - bash <(curl -s https://codecov.io/bash)
+
+notifications:
+        email: false
