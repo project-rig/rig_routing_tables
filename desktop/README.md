@@ -1,12 +1,13 @@
 # Desktop executable
 
-Build a desktop implementation of Ordered-Covering by running `make` in this
-directory.
+Build desktop implementations of Ordered-Covering and m-Trie by running `make`
+in this directory.
 
-The resulting executable can be called with:
+The resulting executables can be called with:
 
 ```bash
 $ ./ordered_covering in_file out_file [target length]
+$ ./mtrie in_file out_file
 ```
 
 ## Input/Output file format

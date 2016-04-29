@@ -20,6 +20,9 @@ int main(void)
   Suite *s_oc = ordered_covering_suite();
   srunner_add_suite(sr, s_oc);
 
+  Suite *s_mtrie = mtrie_suite();
+  srunner_add_suite(sr, s_mtrie);
+
   // Run the tests
   srunner_run_all(sr, CK_NORMAL);
 
