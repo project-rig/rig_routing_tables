@@ -251,7 +251,7 @@ static inline void oc_downcheck(merge_t *m, int min_goodness, aliases_t *a)
           {
             for (unsigned int j = 0; j < l->n_elements; j++)
             {
-              km = alias_list_get(l, j);
+              km = alias_list_get(l, j).keymask;
 
               if (keymask_intersect(km, m->keymask))
               {
@@ -413,6 +413,7 @@ static inline void oc_merge_apply(merge_t *m, aliases_t *aliases)
   entry_t new_entry;
   new_entry.keymask = m->keymask;
   new_entry.route = m->route;
+  new_entry.source = m->source;
 
   // Get the insertion point for the new entry
   unsigned int insertion_point = oc_get_insertion_point(
@@ -454,6 +455,7 @@ static inline void oc_merge_apply(merge_t *m, aliases_t *aliases)
       // Otherwise update the aliases table to account for the entry which is
       // being merged.
       keymask_t km = table->entries[remove].keymask;
+      uint32_t source = table->entries[remove].source;
       if (aliases_contains(aliases, km))
       {
         // Join the old list of aliases with the new
@@ -465,7 +467,7 @@ static inline void oc_merge_apply(merge_t *m, aliases_t *aliases)
       else
       {
         // Include the keymask in the new list of aliases
-        alias_list_append(new_aliases, km);
+        alias_list_append(new_aliases, km, source);
       }
 
       // Decrement the final table size to account for this entry being removed.

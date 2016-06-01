@@ -41,7 +41,7 @@ def get_memory_profile(mc):
 
 def pack_table(table, target_length):
     """Pack a routing table into the form required for dumping into SDRAM."""
-    data = bytearray(2*4 + len(table)*3*4)
+    data = bytearray(2*4 + len(table)*4*4)
 
     # Pack the header
     struct.pack_into("<2I", data, 0, len(table), target_length)
@@ -50,20 +50,25 @@ def pack_table(table, target_length):
     offset = 8
     for entry in table:
         pack_rte_into(entry, data, offset)
-        offset += 12
+        offset += 16
 
     return data
 
 
 def pack_rte_into(rte, buf, offset):
     """Pack a routing table entry into a buffer."""
+    # Construct the source integer
+    source = 0x0
+    for r in rte.source:
+        source |= 1 << r
+
     # Construct the route integer
     route = 0x0
     for r in rte.route:
         route |= 1 << r
 
     # Pack
-    struct.pack_into("<3I", buf, offset, rte.key, rte.mask, route)
+    struct.pack_into("<4I", buf, offset, rte.key, rte.mask, route, source)
 
 
 def unpack_table(data):
@@ -73,9 +78,10 @@ def unpack_table(data):
     # Unpack the table
     table = [None for __ in range(length)]
     for i in range(length):
-        key, mask, route = struct.unpack_from("<3I", data, i*12 + 8)
+        key, mask, route, source = struct.unpack_from("<4I", data, i*16 + 8)
         routes = {r for r in Routes if (1 << r) & route}
-        table[i] = RoutingTableEntry(routes, key, mask)
+        sources = {r for r in Routes if (1 << r) & source}
+        table[i] = RoutingTableEntry(routes, key, mask, sources)
 
     return table
 
@@ -101,7 +107,7 @@ if __name__ == "__main__":
     # Write the table table into memory on chip (0, 0)
     print("Loading tables...")
     with mc(x=0, y=0):
-        mem = mc.sdram_alloc_as_filelike(len(table)*12 + 8, tag=1)
+        mem = mc.sdram_alloc_as_filelike(len(table)*16 + 8, tag=1)
         mem.write(pack_table(table, 0))
 
     # Load the application

@@ -6,12 +6,20 @@
 
 #ifndef __MTRIE_H__
 
+// Short routing table entry resulting from an m-trie
+typedef struct _mtrie_entry_t
+{
+  keymask_t keymask;  // Keymask of the entry
+  uint32_t source;    // Sources of packets in the entry
+} mtrie_entry_t;
+
 // m-Trie structure
 typedef struct _mtrie_node_t
 {
   struct _mtrie_node_t *parent;  // Our parent
   uint32_t bit;  // Bit represented by this Node
   struct _mtrie_node_t *child_0, *child_1, *child_X;  // Children of this Node
+  uint32_t source;  // Source(s) of packets which "reach" this node
 } mtrie_t;
 
 // Create a new (empty) node
@@ -23,6 +31,7 @@ static inline mtrie_t *mtrie_new_node(mtrie_t *parent, uint32_t bit)
   node->parent = parent;
   node->bit = bit;
   node->child_0 = node->child_1 = node->child_X = NULL;
+  node->source = 0x0;
 
   return node;
 }
@@ -69,8 +78,8 @@ static inline unsigned int mtrie_count(mtrie_t *node)
 }
 
 // Extract routing table entries from a trie
-static inline keymask_t* _get_entries(
-  mtrie_t *node, keymask_t *table, uint32_t pkey, uint32_t pmask
+static inline mtrie_entry_t* _get_entries(
+  mtrie_t *node, mtrie_entry_t *table, uint32_t pkey, uint32_t pmask
 )
 {
   if (node == NULL)
@@ -81,8 +90,9 @@ static inline keymask_t* _get_entries(
   {
     // If this is a leaf then add an entry to the table representing this entry
     // and return a pointer to the next entry in the table.
-    table->key = pkey;
-    table->mask = pmask;
+    table->keymask.key = pkey;
+    table->keymask.mask = pmask;
+    table->source = node->source;
 
     // Point to the next table entry
     table++;
@@ -99,7 +109,7 @@ static inline keymask_t* _get_entries(
   return table;
 }
 
-static inline void mtrie_get_entries(mtrie_t *node, keymask_t *table)
+static inline void mtrie_get_entries(mtrie_t *node, mtrie_entry_t *table)
 {
   _get_entries(node, table, 0x0, 0x0);
 }
@@ -132,7 +142,7 @@ static inline mtrie_t** get_child(mtrie_t *node, uint32_t key, uint32_t mask)
 }
 
 // Traverse a path through the tree, adding elements as necessary
-static inline mtrie_t* mtrie_traverse(mtrie_t *node, uint32_t key, uint32_t mask)
+static inline mtrie_t* mtrie_traverse(mtrie_t *node, uint32_t key, uint32_t mask, uint32_t source)
 {
   if (node->bit)  // If not a leaf
   {
@@ -152,11 +162,12 @@ static inline mtrie_t* mtrie_traverse(mtrie_t *node, uint32_t key, uint32_t mask
     }
 
     // Delegate the traversal to the child
-    return mtrie_traverse(*child, key, mask);
+    return mtrie_traverse(*child, key, mask, source);
   }
   else
   {
-    // If we are a leaf then return our parent
+    // If we are a leaf then update our source and return our parent
+    node->source |= source;
     return node->parent;
   }
 }
@@ -220,6 +231,59 @@ static inline bool mtrie_untraverse(mtrie_t *node, uint32_t key, uint32_t mask)
   }
 }
 
+static inline uint32_t get_source_from_child(mtrie_t *node,
+                                             uint32_t key,
+                                             uint32_t mask)
+{
+  if (node->bit)  // If not a leaf
+  {
+    // See where to turn at this node
+    mtrie_t **child = get_child(node, key, mask);
+
+    // If there is no child then the path does not exist or the given path was
+    // invalid.
+    if (!child || !*child)
+    {
+      return false;
+    }
+
+    // Delegate the traversal to the child
+    return get_source_from_child(*child, key, mask);
+  }
+  else
+  {
+    // If we are a leaf then return the source
+    return node->source;
+  }
+}
+
+static inline void add_source_to_child(mtrie_t *node,
+                                       uint32_t key,
+                                       uint32_t mask,
+                                       uint32_t source)
+{
+  if (node->bit)  // If not a leaf
+  {
+    // See where to turn at this node
+    mtrie_t **child = get_child(node, key, mask);
+
+    // If there is no child then the path does not exist or the given path was
+    // invalid.
+    if (!child || !*child)
+    {
+      return;
+    }
+
+    // Delegate the traversal to the child
+    add_source_to_child(*child, key, mask, source);
+  }
+  else
+  {
+    // If we are a leaf then modify the source
+    node->source |= source;
+  }
+}
+
 static inline void untraverse_in_child(mtrie_t **child, uint32_t key, uint32_t mask)
 {
   if (mtrie_untraverse(*child, key, mask))
@@ -229,10 +293,13 @@ static inline void untraverse_in_child(mtrie_t **child, uint32_t key, uint32_t m
 }
 
 // Insert a new entry into the trie
-static inline void mtrie_insert(mtrie_t *root, uint32_t key, uint32_t mask)
+static inline void mtrie_insert(mtrie_t *root,
+                                uint32_t key,
+                                uint32_t mask,
+                                uint32_t source)
 {
   // Traverse a path through the trie and keep a reference to the leaf we reach
-  mtrie_t *leaf = mtrie_traverse(root, key, mask);
+  mtrie_t *leaf = mtrie_traverse(root, key, mask, source);
 
   // Attempt to find overlapping paths
   while (leaf)
@@ -244,12 +311,16 @@ static inline void mtrie_insert(mtrie_t *root, uint32_t key, uint32_t mask)
     if (*child_0 != NULL && path_exists(*child_0, key, mask) &&
         *child_1 != NULL && path_exists(*child_1, key, mask))
     {
+      // Get the combined sources from the existing children
+      source = get_source_from_child(*child_0, key, mask) |
+               get_source_from_child(*child_1, key, mask);
+
       // Traverse the path in X and then untraverse in 0 and 1
       if (*child_X == NULL)
       {
         *child_X = mtrie_new_node(leaf, leaf->bit >> 1);
       }
-      mtrie_traverse(*child_X, key, mask);
+      mtrie_traverse(*child_X, key, mask, source);
 
       // Untraverse in `0' and `1'
       untraverse_in_child(child_0, key, mask);
@@ -262,8 +333,14 @@ static inline void mtrie_insert(mtrie_t *root, uint32_t key, uint32_t mask)
     else if (*child_X != NULL && path_exists(*child_X, key, mask) &&
              *child_0 != NULL && path_exists(*child_0, key, mask))
     {
+      // Get the source for packets matching the `0'
+      source = get_source_from_child(*child_0, key, mask);
+
       // Untraverse in `0'
       untraverse_in_child(child_0, key, mask);
+
+      // Add the sources to X
+      add_source_to_child(*child_X, key, mask, source);
 
       // Update the key and mask
       key &= ~(leaf->bit);
@@ -272,8 +349,14 @@ static inline void mtrie_insert(mtrie_t *root, uint32_t key, uint32_t mask)
     else if (*child_X != NULL && path_exists(*child_X, key, mask) &&
              *child_1 != NULL && path_exists(*child_1, key, mask))
     {
+      // Get the source for packets matching the `1'
+      source = get_source_from_child(*child_1, key, mask);
+
       // Untraverse in `1'
       untraverse_in_child(child_1, key, mask);
+
+      // Add the sources to X
+      add_source_to_child(*child_X, key, mask, source);
 
       // Update the key and mask
       key &= ~(leaf->bit);
@@ -290,7 +373,7 @@ typedef struct _subtable
 {
   unsigned int n_entries;  // Number of entries in the subtable
   uint32_t route;          // Route of all entries in the subtable
-  keymask_t *entries;      // Entries in the subtable
+  mtrie_entry_t *entries;  // Entries in the subtable
 
   struct _subtable *next;  // Next subtable in the chain
 } subtable_t;
@@ -308,7 +391,7 @@ static inline subtable_t* subtable_new(
 
   // Create a new subtable of the desired size
   *sb = MALLOC(sizeof(subtable_t));
-  (*sb)->entries = MALLOC(sizeof(keymask_t) * size);
+  (*sb)->entries = MALLOC(sizeof(mtrie_entry_t) * size);
   (*sb)->n_entries = size;
   (*sb)->route = route;
   (*sb)->next = NULL;
@@ -329,8 +412,9 @@ static inline void subtable_expand(subtable_t *sb, table_t *table)
     // Expand the current subtable
     for (unsigned int i = 0; i < sb->n_entries; i++)
     {
-      next->keymask.key = sb->entries[i].key;
-      next->keymask.mask = sb->entries[i].mask;
+      next->keymask.key = sb->entries[i].keymask.key;
+      next->keymask.mask = sb->entries[i].keymask.mask;
+      next->source = sb->entries[i].source;
       next->route = sb->route;
 
       next++;
@@ -401,7 +485,8 @@ static inline void mtrie_minimise(table_t *table)
         // Add to the trie
         uint32_t key = table->entries[j].keymask.key;
         uint32_t mask = table->entries[j].keymask.mask;
-        mtrie_insert(trie, key, mask);
+        uint32_t source = table->entries[j].source;
+        mtrie_insert(trie, key, mask, source);
       }
     }
 

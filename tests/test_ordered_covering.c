@@ -158,8 +158,8 @@ START_TEST(test_oc_downcheck_does_nothing)
   aliases_insert(&aliases, entries[3].keymask, (void *) l1);
 
   keymask_t k1 = {0b01000, 0b11111}, k2 = {0b11111, 0b11111};
-  alias_list_append(l1, k1);
-  alias_list_append(l1, k2);
+  alias_list_append(l1, k1, 0x0);
+  alias_list_append(l1, k2, 0x0);
 
   // Check that the downcheck does nothing to the merge
   oc_downcheck(&m, 0, &aliases);
@@ -207,8 +207,8 @@ START_TEST(test_oc_downcheck_clears_merge_if_unresolvable)
   // 1XXX = {1011, 1100}
   alias_list_t *l1 = alias_list_new(2);
   keymask_t km1 = {0b1011, 0xf}, km2 = {0b1100, 0xf};
-  alias_list_append(l1, km1);
-  alias_list_append(l1, km2);
+  alias_list_append(l1, km1, 0x0);
+  alias_list_append(l1, km2, 0x0);
 
   // Reset the merge, apply the downcheck again and ensure that the result is
   // the same
@@ -336,7 +336,7 @@ START_TEST(test_oc_downcheck_removes_one_entry_c)
   aliases_t aliases = aliases_init();
   alias_list_t *al1 = alias_list_new(1);
   keymask_t km = {0x9, 0xf};
-  alias_list_append(al1, km);
+  alias_list_append(al1, km, 0x0);
 
   aliases_insert(&aliases, table.entries[3].keymask, al1);
 
@@ -400,28 +400,20 @@ START_TEST(test_merge_apply_at_beginning_of_table)
 {
   // Merge the first two entries:
   //
-  //     0000 -> N
-  //     0001 -> N
-  //     XXXX -> S
+  //     S  -> 0000 -> N
+  //     SW -> 0001 -> N
+  //     E  -> XXXX -> S
   //
   // The result should be:
   //
-  //     000X -> N {0000, 0001}
-  //     XXXX -> S
-  entry_t entries[3];
+  //     SW S -> 000X -> N {0000, 0001}
+  //     E    -> XXXX -> S
+  entry_t entries[] = {
+    {{0x0, 0xf}, 0b000100, 0b100000},
+    {{0x1, 0xf}, 0b000100, 0b010000},
+    {{0x0, 0x0}, 0b100000, 0b000001},
+  };
   table_t table = {3, entries};
-
-  entries[0].keymask.key = 0x0;
-  entries[0].keymask.mask = 0xf;
-  entries[0].route = 0b100;
-
-  entries[1].keymask.key = 0x1;
-  entries[1].keymask.mask = 0xf;
-  entries[1].route = 0b100;
-
-  entries[2].keymask.key = 0x0;
-  entries[2].keymask.mask = 0x0;
-  entries[2].route = 0b100000;
 
   // Create the merge
   merge_t m;
@@ -442,11 +434,13 @@ START_TEST(test_merge_apply_at_beginning_of_table)
   ck_assert_int_eq(table.entries[0].keymask.key, 0x0);
   ck_assert_int_eq(table.entries[0].keymask.mask, 0xe);
   ck_assert_int_eq(table.entries[0].route, 0b100);
+  ck_assert_int_eq(table.entries[0].source, 0b110000);
 
   // Check that the last table in the entry was as it was originally
   ck_assert(table.entries[1].keymask.key == 0x0);
   ck_assert(table.entries[1].keymask.mask == 0x0);
   ck_assert(table.entries[1].route == 0b100000);
+  ck_assert(table.entries[1].source == 0b000001);
 
   // Check that the aliases map contains an entry for the new routing table
   // entry
@@ -457,11 +451,13 @@ START_TEST(test_merge_apply_at_beginning_of_table)
     &aliases, table.entries[0].keymask);
 
   ck_assert_int_eq(l->n_elements, 2);
-  ck_assert(alias_list_get(l, 0).key == 0x0);
-  ck_assert(alias_list_get(l, 0).mask == 0xf);
+  ck_assert(alias_list_get(l, 0).keymask.key == 0x0);
+  ck_assert(alias_list_get(l, 0).keymask.mask == 0xf);
+  ck_assert(alias_list_get(l, 0).source == 0b100000);
 
-  ck_assert(alias_list_get(l, 1).key == 0x1);
-  ck_assert(alias_list_get(l, 1).mask == 0xf);
+  ck_assert(alias_list_get(l, 1).keymask.key == 0x1);
+  ck_assert(alias_list_get(l, 1).keymask.mask == 0xf);
+  ck_assert(alias_list_get(l, 1).source == 0b010000);
 
   // Tidy up
   merge_delete(&m);
@@ -474,28 +470,20 @@ START_TEST(test_merge_apply_at_end_of_table)
 {
   // Merge the first two entries:
   //
-  //     0000 -> N
-  //     001X -> N {0010, 0011}
-  //     1111 -> S
+  //     S  -> 0000 -> N
+  //     SW -> 001X -> N {0010, 0011}
+  //     E  -> 1111 -> S
   //
   // The result should be:
   //
-  //     1111 -> S
-  //     00XX -> N {0000, 0010, 0011}
-  entry_t entries[3];
+  //     E    -> 1111 -> S
+  //     SW S -> 00XX -> N {0000, 0010, 0011}
+  entry_t entries[] = {
+    {{0x0, 0xf}, 0b000100, 0b100000},
+    {{0x2, 0xe}, 0b000100, 0b010000},
+    {{0xf, 0xf}, 0b100000, 0b000001},
+  };
   table_t table = {3, entries};
-
-  entries[0].keymask.key = 0x0;
-  entries[0].keymask.mask = 0xf;
-  entries[0].route = 0b100;
-
-  entries[1].keymask.key = 0x2;
-  entries[1].keymask.mask = 0xe;
-  entries[1].route = 0b100;
-
-  entries[2].keymask.key = 0xf;
-  entries[2].keymask.mask = 0xf;
-  entries[2].route = 0b100000;
 
   // Create the merge
   merge_t m;
@@ -509,8 +497,8 @@ START_TEST(test_merge_apply_at_end_of_table)
   // Add a new aliases entry for 001X
   alias_list_t *l1 = alias_list_new(2);
   keymask_t km1 = {0x2, 0xf}, km2 = {0x3, 0xf};
-  alias_list_append(l1, km1);
-  alias_list_append(l1, km2);
+  alias_list_append(l1, km1, 0b010000);
+  alias_list_append(l1, km2, 0b010000);
   aliases_insert(&aliases, entries[1].keymask, (void *) l1);
 
   // Apply the merge
@@ -523,11 +511,13 @@ START_TEST(test_merge_apply_at_end_of_table)
   ck_assert_int_eq(table.entries[0].keymask.key, 0xf);
   ck_assert_int_eq(table.entries[0].keymask.mask, 0xf);
   ck_assert_int_eq(table.entries[0].route, 0b100000);
+  ck_assert_int_eq(table.entries[0].source, 0b000001);
 
   // Check that the last entry is the result of the merge
   ck_assert(table.entries[1].keymask.key == 0x0);
   ck_assert(table.entries[1].keymask.mask == 0xc);
   ck_assert(table.entries[1].route == 0b100);
+  ck_assert(table.entries[1].source == 0b110000);
 
   // Check that the aliases map contains an entry for the new routing table
   // entry
@@ -538,17 +528,19 @@ START_TEST(test_merge_apply_at_end_of_table)
     &aliases, table.entries[1].keymask);
 
   ck_assert_int_eq(l->n_elements, 1);
-  ck_assert(alias_list_get(l, 0).key == 0x0);
-  ck_assert(alias_list_get(l, 0).mask == 0xf);
+  ck_assert(alias_list_get(l, 0).keymask.key == 0x0);
+  ck_assert(alias_list_get(l, 0).keymask.mask == 0xf);
+  ck_assert(alias_list_get(l, 0).source == 0b100000);
 
   ck_assert(l->next != NULL);
   ck_assert_int_eq(l->next->n_elements, 2);
 
-  ck_assert(alias_list_get(l->next, 0).key == 0x2);
-  ck_assert(alias_list_get(l->next, 0).mask == 0xf);
+  ck_assert(alias_list_get(l->next, 0).keymask.key == 0x2);
+  ck_assert(alias_list_get(l->next, 0).keymask.mask == 0xf);
+  ck_assert(alias_list_get(l->next, 0).source == 0b010000);
 
-  ck_assert(alias_list_get(l->next, 1).key == 0x3);
-  ck_assert(alias_list_get(l->next, 1).mask == 0xf);
+  ck_assert(alias_list_get(l->next, 1).keymask.key == 0x3);
+  ck_assert(alias_list_get(l->next, 1).source == 0b010000);
 
   // Tidy up
   merge_delete(&m);
@@ -677,30 +669,30 @@ START_TEST(test_ordered_covering_full)
 {
   // Test that the given table is minimised correctly:
   //
-  //   0000 -> N NE
-  //   0001 -> E
-  //   0101 -> SW
-  //   1000 -> N NE
-  //   1001 -> E
-  //   1110 -> SW
-  //   1100 -> N NE
-  //   0100 -> S SW
+  //   S  -> 0000 -> N NE
+  //   NE -> 0001 -> E
+  //   NE -> 0101 -> SW
+  //   S  -> 1000 -> N NE
+  //   NE -> 1001 -> E
+  //   S  -> 1110 -> SW
+  //   15 -> 1100 -> N NE
+  //   N  -> 0100 -> S SW
   //
   // The result (worked out by hand) should be:
   //
-  //   0100 -> S SW
-  //   X001 -> E
-  //   XX00 -> N NE
-  //   X1XX -> SW 
+  //   N    -> 0100 -> S SW
+  //   NE   -> X001 -> E
+  //   S 15 -> XX00 -> N NE
+  //   NE S -> X1XX -> SW
   entry_t entries[] = {
-    {{0b0000, 0xf}, 0b000110},
-    {{0b0001, 0xf}, 0b000001},
-    {{0b0101, 0xf}, 0b010000},
-    {{0b1000, 0xf}, 0b000110},
-    {{0b1001, 0xf}, 0b000001},
-    {{0b1110, 0xf}, 0b010000},
-    {{0b1100, 0xf}, 0b000110},
-    {{0b0100, 0xf}, 0b110000}
+    {{0b0000, 0xf}, 0b000110, 0b100000},
+    {{0b0001, 0xf}, 0b000001, 0b000010},
+    {{0b0101, 0xf}, 0b010000, 0b000010},
+    {{0b1000, 0xf}, 0b000110, 0b100000},
+    {{0b1001, 0xf}, 0b000001, 0b000010},
+    {{0b1110, 0xf}, 0b010000, 0b100000},
+    {{0b1100, 0xf}, 0b000110, 1 << (15 + 6)},
+    {{0b0100, 0xf}, 0b110000, 0b000100}
   };
   table_t table = {8, entries};
 
@@ -717,18 +709,22 @@ START_TEST(test_ordered_covering_full)
   ck_assert_int_eq(table.entries[0].keymask.key, 0b0100);
   ck_assert_int_eq(table.entries[0].keymask.mask, 0b1111);
   ck_assert_int_eq(table.entries[0].route, 0b110000);
+  ck_assert_int_eq(table.entries[0].source, 0b000100);
 
   ck_assert_int_eq(table.entries[1].keymask.key, 0b0001);
   ck_assert_int_eq(table.entries[1].keymask.mask, 0b0111);
   ck_assert_int_eq(table.entries[1].route, 0b000001);
+  ck_assert_int_eq(table.entries[1].source, 0b000010);
 
   ck_assert_int_eq(table.entries[2].keymask.key, 0b0000);
   ck_assert_int_eq(table.entries[2].keymask.mask, 0b0011);
   ck_assert_int_eq(table.entries[2].route, 0b000110);
+  ck_assert_int_eq(table.entries[2].source, 1 << (15 + 6) | 0b100000);
 
   ck_assert_int_eq(table.entries[3].keymask.key, 0b0100);
   ck_assert_int_eq(table.entries[3].keymask.mask, 0b0100);
   ck_assert_int_eq(table.entries[3].route, 0b010000);
+  ck_assert_int_eq(table.entries[3].source, 0b100010);
 
   // Tidy up (remove all entries from the aliases list)
   aliases_clear(&aliases);

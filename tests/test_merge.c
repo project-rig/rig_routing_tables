@@ -7,11 +7,11 @@ START_TEST(test_merge_lifecycle)
 {
   // Create a routing table from which we'll build merges
   entry_t entries[] = {
-    {{0x0, 0xf}, 0b001},
-    {{0x1, 0xf}, 0b001},
-    {{0x2, 0xf}, 0b001},
-    {{0x6, 0xf}, 0b001},
-    {{0x0, 0x0}, 0b111},
+    {{0x0, 0xf}, 0b001, 0b00001},
+    {{0x1, 0xf}, 0b001, 0b00010},
+    {{0x2, 0xf}, 0b001, 0b00100},
+    {{0x6, 0xf}, 0b001, 0b01000},
+    {{0x0, 0x0}, 0b111, 0b10000},
   };
   table_t table = {5, entries};
 
@@ -32,6 +32,7 @@ START_TEST(test_merge_lifecycle)
   ck_assert_int_eq(m.keymask.key, 0x2);
   ck_assert_int_eq(m.keymask.mask, 0xf);
   ck_assert_int_eq(m.route, 0x1);
+  ck_assert_int_eq(m.source, 0b00100);
 
   // Add another entry to a merge and then check that the resultant key-mask is
   // correct.
@@ -39,6 +40,7 @@ START_TEST(test_merge_lifecycle)
   ck_assert_int_eq(m.keymask.key,  0b0010);
   ck_assert_int_eq(m.keymask.mask, 0b1011);
   ck_assert_int_eq(m.route, 0x1);
+  ck_assert_int_eq(m.source, 0b01100);
 
   ck_assert(!merge_contains(&m, 0));
   ck_assert(!merge_contains(&m, 1));
@@ -50,6 +52,7 @@ START_TEST(test_merge_lifecycle)
   ck_assert_int_eq(m.keymask.key,  0b0000);
   ck_assert_int_eq(m.keymask.mask, 0b1000);
   ck_assert_int_eq(m.route, 0x1);
+  ck_assert_int_eq(m.source, 0b01110);
 
   // Remove an entry from the table and ensure that the keymask is recalculated
   // correctly and that the route is correct.
@@ -57,16 +60,19 @@ START_TEST(test_merge_lifecycle)
   ck_assert_int_eq(m.keymask.key,  0b0000);
   ck_assert_int_eq(m.keymask.mask, 0b1100);
   ck_assert_int_eq(m.route, 0x1);
+  ck_assert_int_eq(m.source, 0b00110);
 
   merge_remove(&m, 2);  // Merge is now a merge of only 0001
   ck_assert_int_eq(m.keymask.key,  0b0001);
   ck_assert_int_eq(m.keymask.mask, 0b1111);
   ck_assert_int_eq(m.route, 0x1);
+  ck_assert_int_eq(m.source, 0b00010);
 
   merge_remove(&m, 1);  // Merge is now empty
   ck_assert_int_eq(m.keymask.key,  0xffffffff);
   ck_assert_int_eq(m.keymask.mask, 0x00000000);
   ck_assert_int_eq(m.route, 0x0);
+  ck_assert_int_eq(m.source, 0b00000);
 
   // Delete the merge
   merge_delete(&m);

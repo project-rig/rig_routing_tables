@@ -10,6 +10,7 @@ typedef struct _merge_t
 
   keymask_t keymask; // Keymask resulting from the merge
   uint32_t route;    // Route taken by entries in the merge
+  uint32_t source;   // Collective source of entries in the route
 } merge_t;
 
 
@@ -23,6 +24,7 @@ static inline void merge_clear(merge_t* m)
   m->keymask.key  = 0xffffffff;  // !!!...
   m->keymask.mask = 0x00000000;  // Matches nothing
   m->route = 0x0;
+  m->source = 0x0;
 }
 
 
@@ -76,6 +78,7 @@ static inline void merge_add(merge_t* m, unsigned int i)
 
     // Add the route
     m->route |= e.route;
+    m->source |= e.source;
   }
 }
 
@@ -95,6 +98,7 @@ static inline void merge_remove(merge_t* m, unsigned int i)
   {
     // Rebuild the key and mask from scratch
     m->route = 0x0;
+    m->source = 0x0;
     m->keymask.key  = 0xffffffff;
     m->keymask.mask = 0x000000000;
     for (unsigned int j = 0; j < m->table->size; j++)
@@ -104,6 +108,7 @@ static inline void merge_remove(merge_t* m, unsigned int i)
       if (bitset_contains(&(m->entries), j))
       {
         m->route |= e.route;
+        m->source |= e.source;
         if (m->keymask.key  == 0xffffffff && m->keymask.mask == 0x00000000)
         {
           // Initialise the keymask

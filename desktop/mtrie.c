@@ -71,6 +71,7 @@ int main(int argc, char *argv[])
       table.entries[i].keymask.key = t.key;
       table.entries[i].keymask.mask = t.mask;
       table.entries[i].route = t.route;
+      table.entries[i].source = t.source;
     }
 
     // Perform the minimisation
@@ -88,7 +89,7 @@ int main(int argc, char *argv[])
         // Copy relevant fields across
         table.entries[i].keymask.key,
         table.entries[i].keymask.mask,
-        0x0,  // No source
+        table.entries[i].source,
         table.entries[i].route,
       };
       fwrite(&t, sizeof(fentry_t), 1, out_file);
