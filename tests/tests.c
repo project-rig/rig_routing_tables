@@ -23,6 +23,9 @@ int main(void)
   Suite *s_mtrie = mtrie_suite();
   srunner_add_suite(sr, s_mtrie);
 
+  Suite *s_rdr = remove_default_suite();
+  srunner_add_suite(sr, s_rdr);
+
   // Run the tests
   srunner_run_all(sr, CK_NORMAL);
 
