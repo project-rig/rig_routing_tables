@@ -48,6 +48,7 @@ typedef struct _entry_t
 {
   keymask_t keymask;  // Key and mask
   uint32_t route;     // Routing direction
+  uint32_t source;    // Source of packets arriving at this entry
 } entry_t;
 
 

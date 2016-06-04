@@ -12,17 +12,18 @@ START_TEST(test_aliases_list)
 
   // Add an element
   keymask_t km = {0x0, 0xf};
-  alias_list_append(l1, km);
+  alias_list_append(l1, km, 0b01001);
   ck_assert_int_eq(l1->n_elements, 1);  // Now contains 1 element
-  ck_assert(alias_list_get(l1, 0).key == km.key);  // Check the element is expected
-  ck_assert(alias_list_get(l1, 0).mask == km.mask);  // Check the element is expected
+  ck_assert(alias_list_get(l1, 0).keymask.key == km.key);  // Check the element is expected
+  ck_assert(alias_list_get(l1, 0).keymask.mask == km.mask);  // Check the element is expected
+  ck_assert(alias_list_get(l1, 0).source == 0b01001);  // Check the element is expected
 
   // This should cause no problems with memory accesses
-  ck_assert(alias_list_append(l1, km));
-  ck_assert(alias_list_append(l1, km));
-  ck_assert(alias_list_append(l1, km));
-  ck_assert(alias_list_append(l1, km));
-  ck_assert(!alias_list_append(l1, km));  // This will be a problem!
+  ck_assert(alias_list_append(l1, km, 0x0));
+  ck_assert(alias_list_append(l1, km, 0x0));
+  ck_assert(alias_list_append(l1, km, 0x0));
+  ck_assert(alias_list_append(l1, km, 0x0));
+  ck_assert(!alias_list_append(l1, km, 0x0));  // This will be a problem!
 
   // Create a new alias list and append it to the existing list
   alias_list_t *l2 = alias_list_new(10);

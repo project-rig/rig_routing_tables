@@ -12,13 +12,20 @@
 /* Vector-like object ********************************************************/
 
 
+typedef struct _alias_element_t  // Element of an alias list
+{
+  keymask_t keymask;  // Keymask of the element
+  uint32_t source;    // Source of packets matching the element
+} alias_element_t;
+
+
 typedef struct _alias_list_t
 {
   // Linked list of arrays
   unsigned int n_elements;     // Elements in this instance
   unsigned int max_size;       // Max number of elements in this instance
   struct _alias_list_t *next;  // Next element in list of lists
-  keymask_t data;              // Data region
+  alias_element_t data;        // Data region
 } alias_list_t;
 
 
@@ -27,7 +34,7 @@ static inline alias_list_t* alias_list_new(unsigned int max_size)
 {
   // Compute how much memory to allocate
   unsigned int size = sizeof(alias_list_t) +
-                      (max_size - 1)*sizeof(keymask_t);
+                      (max_size - 1)*sizeof(alias_element_t);
 
   // Allocate and then fill in values
   alias_list_t *as = MALLOC(size);
@@ -40,11 +47,14 @@ static inline alias_list_t* alias_list_new(unsigned int max_size)
 
 
 // Append an element to a list
-static inline bool alias_list_append(alias_list_t *as, keymask_t val)
+static inline bool alias_list_append(alias_list_t *as,
+                                     keymask_t val,
+                                     uint32_t source)
 {
   if (as->n_elements < as->max_size)
   {
-    (&as->data)[as->n_elements] = val;
+    (&as->data)[as->n_elements].keymask = val;
+    (&as->data)[as->n_elements].source = source;
     as->n_elements++;
 
     return true;
@@ -58,7 +68,7 @@ static inline bool alias_list_append(alias_list_t *as, keymask_t val)
 
 
 // Get an element from the list
-static inline keymask_t alias_list_get(alias_list_t *as, unsigned int i)
+static inline alias_element_t alias_list_get(alias_list_t *as, unsigned int i)
 {
   return (&as->data)[i];
 }
