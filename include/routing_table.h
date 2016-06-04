@@ -58,6 +58,5 @@ typedef struct _table_t
   entry_t *entries;   // Entries in the table
 } table_t;
 
-
 #define __ROUTING_TABLE_H__
 #endif  // __ROUTING_TABLE_H__

@@ -1,0 +1,3 @@
+[run]
+branch = True
+omit = rig_routing_tables/cffi_compile.py

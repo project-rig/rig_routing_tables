@@ -1,4 +1,10 @@
-tests/tests
+*.pyc
+.eggs/
+.coverage
+.cache/*
+build/*
+*.egg-info/*
+c_tests/tests
 *.o
 *.gcov
 *.gcda
@@ -7,3 +13,4 @@ tests/tests
 *.aplx
 *.elf
 spinnaker/sark_build.c
+_rig_routing_tables.*

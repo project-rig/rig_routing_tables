@@ -522,6 +522,28 @@ static inline void oc_minimise(
   }
 }
 
+// Apply the ordered covering algorithm to a routing table without a
+// pre-existing aliases table.
+static inline void oc_minimise_na(table_t *table, unsigned int target_length)
+{
+  // Create an empty aliases table
+  aliases_t aliases = aliases_init();
+
+  // Minimise
+  oc_minimise(table, target_length, &aliases);
+
+  // Tidy up the aliases table
+  for (unsigned int i = 0; i < table->size; i++)
+  {
+    keymask_t km = table->entries[i].keymask;
+    if (aliases_contains(&aliases, km))
+    {
+      alias_list_delete((alias_list_t *) aliases_find(&aliases, km));
+      aliases_remove(&aliases, km);
+    }
+  }
+}
+
 
 #define __ORDERED_COVERING_H__
 #endif  // __ORDERED_COVERING_H__

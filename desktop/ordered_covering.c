@@ -43,27 +43,6 @@ int entry_cmp(const void *a, const void *b)
 }
 
 
-void minimise(table_t *table, unsigned int target_length)
-{
-  // Create an empty aliases table
-  aliases_t aliases = aliases_init();
-
-  // Minimise
-  oc_minimise(table, target_length, &aliases);
-
-  // Tidy up the aliases table
-  for (unsigned int i = 0; i < table->size; i++)
-  {
-    keymask_t km = table->entries[i].keymask;
-    if (aliases_contains(&aliases, km))
-    {
-      alias_list_delete((alias_list_t *) aliases_find(&aliases, km));
-      aliases_remove(&aliases, km);
-    }
-  }
-}
-
-
 int main(int argc, char *argv[])
 {
   // Usage:
@@ -128,7 +107,7 @@ int main(int argc, char *argv[])
     qsort(table.entries, table.size, sizeof(entry_t), entry_cmp);
 
     // Perform the minimisation
-    minimise(&table, target_length);
+    oc_minimise_na(&table, target_length);
 
     printf("%u\n", table.size);
 

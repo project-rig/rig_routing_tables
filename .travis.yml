@@ -1,18 +1,37 @@
-sudo: false
-language: c
+# Travis Configuration based on that used for rig_c_sa
+sudo: false  # Use the container based system
+language: python  # Build under Python to avoid needing to compile Numpy
+python:
+  - 2.7
+  - 3.4
+  - 3.5
 
+# Install packages for building and running the test suite
 addons:
   apt:
     packages:
       - check
       - valgrind
+      - libffi-dev
+
+install:
+  - CFLAGS=--std=gnu99 python setup.py develop
+  - pip install -r requirements-test.txt
 
 script:
-        - cd ./tests
-        - make coverage
+  # Run the C tests first
+  - cd c_tests
+  - make coverage
+  - cd -
+  # Then check that the package can be built, and run the Python tests
+  - >
+      py.test py_tests \
+              --cov rig_routing_tables \
+              --cov py_tests
+  - flake8 rig_routing_tables py_tests
 
 after_success:
-          - bash <(curl -s https://codecov.io/bash)
+  - bash <(curl -s https://codecov.io/bash)
 
 notifications:
-        email: false
+  email: false
