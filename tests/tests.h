@@ -9,6 +9,7 @@ Suite* merge_suite(void);
 Suite* ordered_covering_suite(void);
 Suite* aliases_suite(void);
 Suite* mtrie_suite(void);
+Suite* remove_default_suite(void);
 
 
 #define __TEST_H__
