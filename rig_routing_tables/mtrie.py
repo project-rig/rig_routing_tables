@@ -10,8 +10,7 @@ def minimise(table, target_length):
     Parameters
     ----------
     routing_table : [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
-        Routing table from which to remove entries which could be handled by
-        default routing.
+        Routing table to minimise.
     target_length : int or None
         Target length of the routing table.
 
