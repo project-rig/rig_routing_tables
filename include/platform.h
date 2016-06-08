@@ -27,7 +27,17 @@
 #else
   #include <stdlib.h>
 
-  #define MALLOC malloc
+  static inline void * safe_malloc(uint bytes)
+  {
+    void* p = malloc(bytes);
+    if (p == NULL)
+    {
+      exit(-1);
+    }
+    return p;
+  }
+
+  #define MALLOC safe_malloc
   #define FREE   free
 #endif
 
