@@ -10,6 +10,7 @@ ffi.set_source(
     "_rig_routing_tables",
     """
         #include "mtrie.h"
+        #include "remove_default_routes.h"
         #include "routing_table.h"
         #include "ordered_covering.h"
         #include "cffi_utils.h"
@@ -49,6 +50,7 @@ ffi.cdef("""
     // Minimisation methods
     void mtrie_minimise(table_t *table);
     void oc_minimise_na(table_t *table, unsigned int target_length);
+    void remove_default_routes_minimise(table_t *table);
 """)
 
 if __name__ == "__main__":

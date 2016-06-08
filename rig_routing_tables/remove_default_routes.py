@@ -4,8 +4,8 @@ from _rig_routing_tables import lib
 
 
 def minimise(table, target_length):
-    """Minimise a Rig routing table using the m-Trie method of Ahmad and
-    Mahapatra [1]_.
+    """Minimise a Rig routing table by removing all entries which could be
+    replaced by default routing.
 
     Parameters
     ----------
@@ -25,14 +25,9 @@ def minimise(table, target_length):
     -------
     [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
         Reduced routing table entries.
-
-    [1]_ Ahmad, S. and Mahapatra, R.N., 2007. An efficient approach to on-chip
-    logic minimization. *Very Large Scale Integration (VLSI) Systems, IEEE
-    Transactions on*, 15(9), pp.1040-1050.
     """
     # Convert the table to C format and minimise
     c_table = rig_to_c_table(table)
-    lib.mtrie_minimise(c_table)
     lib.remove_default_routes_minimise(c_table)
 
     # If the table is larger than the target length then raise an exception
