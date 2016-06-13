@@ -67,7 +67,7 @@ def test_ordered_covering_simple_fails_if_too_large():
 
 def test_sort_table_before_minimisation():
     """Test that the routing table is reordered before insertion.
-    
+
     The following table won't minimise, but should be reordered:
 
         01XX -> N
