@@ -63,3 +63,25 @@ def test_ordered_covering_simple_fails_if_too_large():
     assert exc.value.target_length == 1
     assert exc.value.final_length == 2
     assert exc.value.chip is None
+
+
+def test_sort_table_before_minimisation():
+    """Test that the routing table is reordered before insertion.
+    
+    The following table won't minimise, but should be reordered:
+
+        01XX -> N
+        001X -> NE
+        0000 -> E
+    """
+    table = [
+        RTE({Routes.north}, 0x4, 0xc),
+        RTE({Routes.north_east}, 0x2, 0xe),
+        RTE({Routes.east}, 0x0, 0xf),
+    ]
+
+    # Minimise (should re-order)
+    minimised = minimise(list(table), None)
+
+    # Assert the reordering occurred
+    assert minimised == table[-1::-1]

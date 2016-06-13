@@ -3,6 +3,11 @@ from rig_routing_tables.utils import rig_to_c_table, c_to_rig_table
 from _rig_routing_tables import lib
 
 
+def get_generality(entry):
+    """Return the generality (number of Xs) of the entry."""
+    return sum((~(entry.key | entry.mask) >> i) & 1 for i in range(31))
+
+
 def minimise(table, target_length, no_raise=False):
     """Minimise a Rig routing table using the Ordered Covering algorithm [1]_.
 
@@ -29,6 +34,9 @@ def minimise(table, target_length, no_raise=False):
     Performance Switching and Routing (HPSR), 2016 International Conference on*
     IEEE (In Press)
     """
+    # Initially sort the table in ascending order of generality
+    table.sort(key=get_generality)
+
     # Convert the table to C format and minimise
     c_table = rig_to_c_table(table)
     lib.oc_minimise_na(c_table, target_length or 0)
