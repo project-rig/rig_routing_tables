@@ -30,7 +30,6 @@ setup(
         "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
 
         "Operating System :: POSIX :: Linux",
-        "Operating System :: Microsoft :: Windows",
         "Operating System :: MacOS",
 
         "Programming Language :: Python :: 2",
