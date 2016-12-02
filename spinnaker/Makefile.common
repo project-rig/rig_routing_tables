@@ -1,5 +1,3 @@
-CFLAGS += -Wall -Wextra -I ../include/ -DSPINNAKER
-
 ##------------------------------------------------------------------------------
 ##
 ## Makefile        Makefile for a SpiNNaker application
@@ -56,9 +54,11 @@ LIB := 0
 ifdef SPINN_DIRS
   LIB_DIR := $(SPINN_DIRS)/lib
   INC_DIR := $(SPINN_DIRS)/include
+  TOOLS_DIR := $(SPINN_DIRS)/tools
 else
   LIB_DIR := ../../lib
   INC_DIR := ../../include
+  TOOLS_DIR := ../../tools
 endif
 
 #-------------------------------------------------------------------------------
@@ -70,7 +70,7 @@ endif
 ifeq ($(GNU),1)
   AS := $(GP)-as --defsym GNU=1 -mthumb-interwork -march=armv5te
 
-  CA := $(GP)-gcc -c -Ofast -mthumb-interwork -march=armv5te -std=gnu99 \
+  CA := $(GP)-gcc -c -Os -mthumb-interwork -march=armv5te -std=gnu99 \
 	-I $(INC_DIR)
 
   CT := $(CA) -mthumb -DTHUMB
@@ -87,13 +87,14 @@ else
   LIBRARY := $(LIB_DIR)/libsark.a
 endif
 
-  SCRIPT := $(LIB_DIR)/sark.lnk
+  SCRIPT := $(TOOLS_DIR)/sark.lnk
 
   LD := $(GP)-gcc -T$(SCRIPT) -Wl,-e,cpu_reset -Wl,--gc-sections -Wl,--use-blx 
 
   AR := $(GP)-ar -rcs
   OC := $(GP)-objcopy
   OD := $(GP)-objdump -dxt > $(APP).txt
+  NM := $(GP)-nm
 
 # ARM tool setup
 
@@ -115,14 +116,14 @@ else
   LIBRARY := $(LIB_DIR)/sark.a
 endif
 
-  SCRIPT := $(LIB_DIR)/sark.sct
+  SCRIPT := $(TOOLS_DIR)/sark.sct
 
   LD := armlink --scatter=$(SCRIPT) --remove --entry cpu_reset
 
   AR := armar -rcs
   OC := fromelf
   OD := fromelf -cds --output $(APP).txt
-
+  NM := nm
 endif
 
 ifeq ($(THUMB),1)
@@ -168,7 +169,8 @@ ifeq ($(GNU),1)
 else
 	$(OC) --bin --output $(APP).bin $(APP).elf
 endif
-	mkaplx $(APP).elf | $(CAT) - $(APP).bin > $(APP).aplx
+	$(NM) $(APP).elf > $(APP).nm
+	mkaplx $(APP).nm | $(CAT) - $(APP).bin > $(APP).aplx
 	$(RM) $(APP).bin RO_DATA.bin RW_DATA.bin
 
 
@@ -195,8 +197,8 @@ $(BUILDDIR)/%.o: $(SPINNAKER_COMPONENTS)/%.c $(INC_DIR)/spinnaker.h $(INC_DIR)/s
 # Tidy and cleaning dependencies
 
 tidy:
-	$(RM) $(OBJECTS) $(APP).elf $(APP).txt $(APP).aplx
+	$(RM) $(OBJECTS) $(APP).elf $(APP).txt $(APP).aplx $(APP).nm
 clean: tidy
-	$(RM) $(APP).aplx
+	$(RM) $(APP_DIR)/$(APP).aplx
 
 #-------------------------------------------------------------------------------
