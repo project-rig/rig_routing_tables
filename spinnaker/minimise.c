@@ -6,7 +6,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "spin1_api.h"
-#include "mtrie.h"
 #include "ordered_covering.h"
 #include "remove_default_routes.h"
 
@@ -90,7 +89,7 @@ void c_main(void)
   read_table(&table, header);
 
   // Store intermediate sizes for later reporting (if we fail to minimise)
-  uint32_t size_original, size_rde, size_mtrie, size_oc;
+  uint32_t size_original, size_rde, size_oc;
   size_original = table.size;
 
   // Try to load the table
@@ -103,50 +102,41 @@ void c_main(void)
     // Try to load the table
     if (!load_routing_table(&table, header->app_id))
     {
-      // Try to use m-Trie to minimise the routing table.
-      mtrie_minimise(&table);
-      size_mtrie = table.size;
+      // Try to use Ordered Covering the minimise the table. This requires
+      // that the table be reloaded from memory and that it be sorted in
+      // ascending order of generality.
+      FREE(table.entries);
+      read_table(&table, header);
+      qsort(table.entries, table.size, sizeof(entry_t), compare_rte);
 
-      // Try to load the table
+      // Get the target length of the routing table
+      uint32_t target_length = rtr_alloc_max();
+
+      // Perform the minimisation
+      aliases_t aliases = aliases_init();
+      oc_minimise(&table, target_length, &aliases);
+      size_oc = table.size;
+
+      // Clean up the memory used by the aliases table
+      aliases_clear(&aliases);
+
+      // Try to load the routing table
       if (!load_routing_table(&table, header->app_id))
       {
-        // Try to use Ordered Covering the minimise the table. This requires
-        // that the table be reloaded from memory and that it be sorted in
-        // ascending order of generality.
+        // Otherwise give up and exit with a runtime error
+        io_printf(
+          IO_BUF, "Failed to minimise routing table to fit %u entries.\n"
+                  "(Original table: %u\n",
+                  " after removing default entries: %u\n,"
+                  " after Ordered Covering: %u).\n",
+          size_original, size_rde, size_oc
+        );
+        rt_error(RTE_ABORT);
+      }
+      else
+      {
+        // Free the memory used by the routing table
         FREE(table.entries);
-        read_table(&table, header);
-        qsort(table.entries, table.size, sizeof(entry_t), compare_rte);
-
-        // Get the target length of the routing table
-        uint32_t target_length = rtr_alloc_max();
-
-        // Perform the minimisation
-        aliases_t aliases = aliases_init();
-        oc_minimise(&table, target_length, &aliases);
-        size_oc = table.size;
-
-        // Clean up the memory used by the aliases table
-        aliases_clear(&aliases);
-
-        // Try to load the routing table
-        if (!load_routing_table(&table, header->app_id))
-        {
-          // Otherwise give up and exit with a runtime error
-          io_printf(
-            IO_BUF, "Failed to minimise routing table to fit %u entries.\n"
-                    "(Original table: %u\n",
-                    " after removing default entries: %u\n,"
-                    " after m-Trie: %u\n,"
-                    " after Ordered Covering: %u).\n",
-            size_original, size_rde, size_mtrie, size_oc
-          );
-          rt_error(RTE_ABORT);
-        }
-        else
-        {
-          // Free the memory used by the routing table
-          FREE(table.entries);
-        }
       }
     }
   }
