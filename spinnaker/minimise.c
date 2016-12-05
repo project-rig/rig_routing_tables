@@ -1,8 +1,3 @@
-/* SpiNNaker routing table minimisation.
- *
- * Minimises a routing table loaded into SDRAM and loads the minimised table
- * into SDRAM with the specified application ID.
- */
 #include <stdbool.h>
 #include <stdlib.h>
 #include "spin1_api.h"
@@ -10,9 +5,27 @@
 #include "remove_default_routes.h"
 
 /*****************************************************************************/
-/* The memory address tagged with tag "1" is expected contain the following
- * struct (entry_t is defined in `routing_table.h`).
+/* SpiNNaker routing table minimisation.
+ *
+ * Minimise a routing table loaded into SDRAM and load the minimised table into
+ * the router using the specified application ID.
+ *
+ * There are two failure modes which will cause the application to raise a
+ * run-time exception.
+ *
+ *  - RTE_MALLOC: Indicates that it might be possible to minimise the table
+ *                but that it was not possible to do so on SpiNNaker due to
+ *                memory constraints. Consider retrying the minimisation on
+ *                host.
+ *  - RTE_ABORT:  Indicates that it was not possible to minimise the routing
+ *                table to fit within the space available in the router.
+ *                Consider trying a different minimisation procedure than those
+ *                contained within this executable.
+ *
+ * The memory address with tag "1" is expected contain the following struct
+ * (entry_t is defined in `routing_table.h` but is described below).
  */
+
 typedef struct
 {
   uint32_t app_id;      // Application ID to use to load the routing table
@@ -20,10 +33,31 @@ typedef struct
   uint32_t table_size;  // Initial size of the routing table.
   entry_t entries[];    // Routing table entries
 } header_t;
+
+/* entry_t is defined as:
+ *
+ *     typedef struct
+ *     {
+ *       uint32_t key;
+ *       uint32_t mask;
+ *       uint32_t route;   // Routing direction
+ *       uint32_t source;  // Source of packets arriving at this entry
+ *     } entry_t;
+ *
+ * The `source` field is used to determine if the entry could be replaced by
+ * default routing, it can be left blank if removing default entries is not to
+ * be used. Otherwise indicate which links will be used by packets expected to
+ * match the specified entry.
+ * 
+ * NOTE: The routing table provided to this application MUST include all of the
+ * entries which are expected to arrive at this router (i.e., entries which
+ * could be replaced by default routing MUST be included in the table provided
+ * to this application).
+ */
 /*****************************************************************************/
 
 /*****************************************************************************/
-/* Utility method to read a new copy of the routing table from SDRAM.        */
+/* Read a new copy of the routing table from SDRAM.                          */
 void read_table(table_t *table, header_t *header)
 {
   // Copy the size of the table
@@ -40,7 +74,7 @@ void read_table(table_t *table, header_t *header)
 /*****************************************************************************/
 
 /*****************************************************************************/
-/* Utility method to load a routing table to the router.                     */
+/* Load a routing table to the router.                                       */
 bool load_routing_table(table_t *table, uint32_t app_id)
 {
   // Try to allocate sufficient room for the routing table.
@@ -66,7 +100,7 @@ bool load_routing_table(table_t *table, uint32_t app_id)
 /*****************************************************************************/
 
 /*****************************************************************************/
-/* Utility method to sort routing table entries.                             */
+/* Method used to sort routing table entries.                                */
 int compare_rte(const void *va, const void *vb)
 {
   // Grab the keys and masks
