@@ -28,7 +28,11 @@
 
 typedef struct
 {
-  uint32_t app_id;      // Application ID to use to load the routing table
+  // Application ID to use to load the routing table. This can be left as `0'
+  // to load routing entries with the same application ID that was used to load
+  // this application.
+  uint32_t app_id;
+
   uint32_t flags;       // Currently there are no flags
   uint32_t table_size;  // Initial size of the routing table.
   entry_t entries[];    // Routing table entries
@@ -53,6 +57,9 @@ typedef struct
  * entries which are expected to arrive at this router (i.e., entries which
  * could be replaced by default routing MUST be included in the table provided
  * to this application).
+ *
+ * NOTE: The block of memory containing the header and initial routing table
+ * will be freed on exit by this application.
  */
 /*****************************************************************************/
 
@@ -165,14 +172,20 @@ void c_main(void)
                   " after Ordered Covering: %u).\n",
           size_original, size_rde, size_oc
         );
+
+        // Free the block of SDRAM used to load the routing table.
+        sark_xfree(sv->sdram_heap, (void *) header, ALLOC_LOCK);
+
+        // Raise the runtime error
         rt_error(RTE_ABORT);
-      }
-      else
-      {
-        // Free the memory used by the routing table
-        FREE(table.entries);
       }
     }
   }
+
+  // Free the memory used by the routing table.
+  FREE(table.entries);
+
+  // Free the block of SDRAM used to load the routing table.
+  sark_xfree(sv->sdram_heap, (void *) header, ALLOC_LOCK);
 }
 /*****************************************************************************/
