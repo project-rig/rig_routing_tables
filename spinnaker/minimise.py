@@ -1,53 +1,19 @@
-"""Use a SpiNNaker implementation of Ordered Covering to minimise routing
-tables.
+"""Use an application to load routing tables for us.
 """
 from rig.machine_control import MachineController
 from rig.routing_table import RoutingTableEntry, Routes
 import struct
 
 
-def get_memory_profile(mc):
-    """Return the cumulative heap usage over time."""
-    # Keep a track of how much memory is associated with each pointer,
-    # track cumulative memory usage over time
-    usage = [0]
-    pointers = dict()
-
-    # Read the linked list of entry arrays
-    buf = mc.read_vcpu_struct_field("user0")
-    while buf != 0x0:
-        # Unpack the header
-        n_entries, buf_next = struct.unpack("<2I", mc.read(buf, 8))
-        buf += 8
-
-        # Read in the memory recording entries
-        for _ in range(n_entries):
-            n_bytes, ptr = struct.unpack("<2I", mc.read(buf, 8))
-            buf += 8
-
-            if n_bytes == 0:
-                # This is a free
-                usage.append(usage[-1] - pointers.pop(ptr))
-            else:
-                # This is an allocation
-                usage.append(usage[-1] + n_bytes)
-                pointers[ptr] = n_bytes
-
-        # Progress to the next block of memory
-        buf = buf_next
-
-    return usage
-
-
-def pack_table(table, target_length):
+def pack_table(table, app_id):
     """Pack a routing table into the form required for dumping into SDRAM."""
-    data = bytearray(2*4 + len(table)*4*4)
+    data = bytearray(3*4 + len(table)*4*4)
 
     # Pack the header
-    struct.pack_into("<2I", data, 0, len(table), target_length)
+    struct.pack_into("<3I", data, 0, app_id, 0x0, len(table))
 
     # Pack in the entries
-    offset = 8
+    offset = 3*4
     for entry in table:
         pack_rte_into(entry, data, offset)
         offset += 16
@@ -59,8 +25,9 @@ def pack_rte_into(rte, buf, offset):
     """Pack a routing table entry into a buffer."""
     # Construct the source integer
     source = 0x0
-    for r in rte.source:
-        source |= 1 << r
+    for r in rte.sources:
+        if r is not None:
+            source |= 1 << r
 
     # Construct the route integer
     route = 0x0
@@ -69,21 +36,6 @@ def pack_rte_into(rte, buf, offset):
 
     # Pack
     struct.pack_into("<4I", buf, offset, rte.key, rte.mask, route, source)
-
-
-def unpack_table(data):
-    # Unpack the header
-    length, _ = struct.unpack_from("<2I", data)
-
-    # Unpack the table
-    table = [None for __ in range(length)]
-    for i in range(length):
-        key, mask, route, source = struct.unpack_from("<4I", data, i*16 + 8)
-        routes = {r for r in Routes if (1 << r) & route}
-        sources = {r for r in Routes if (1 << r) & source}
-        table[i] = RoutingTableEntry(routes, key, mask, sources)
-
-    return table
 
 
 if __name__ == "__main__":
@@ -102,36 +54,38 @@ if __name__ == "__main__":
 
     # Talk to the machine
     mc = MachineController("192.168.1.1")
-    mc.send_signal("stop")
+    with mc.application(57):
+        # Write the table table into memory on chip (0, 0)
+        print("Loading tables...")
+        with mc(x=0, y=0):
+            mem = mc.sdram_alloc_as_filelike(len(table)*16 + 12, tag=1)
+            mem.write(pack_table(table, 57))
 
-    # Write the table table into memory on chip (0, 0)
-    print("Loading tables...")
-    with mc(x=0, y=0):
-        mem = mc.sdram_alloc_as_filelike(len(table)*16 + 8, tag=1)
-        mem.write(pack_table(table, 0))
+        # Load the application
+        print("Loading app...")
+        mc.load_application("./rt_minimise.aplx", {(0, 0): {1}})
 
-    # Load the application
-    print("Loading app...")
-    mc.load_application("./ordered_covering_profiled.aplx", {(0, 0): {1}})
+        # Wait until this does something interesting
+        print("Minimising...")
+        ready = mc.wait_for_cores_to_reach_state("exit", 1, timeout=5.0)
+        if ready < 1:
+            print(mc.get_iobuf(x=0, y=0, p=1))
+            raise Exception("Something didn't work...")
 
-    # Wait until this does something interesting
-    print("Minimising...")
-    ready = mc.wait_for_cores_to_reach_state("exit", 1, timeout=5.0)
-    if ready < 1:
-        raise Exception("Something didn't work...")
+    print("\nReading minimised table...")
+    for e in mc.get_routing_table_entries(x=0, y=0):
+        if e is not None:
+            entry, app, _ = e
+            print("{:d}: {:#010x}/{:#010x} --> {}".format(
+                app, entry.key, entry.mask, entry.route)
+            )
 
-    # Read back the table
-    print("Reading back table...")
-    mem.seek(0)
-    new_table = unpack_table(mem.read())
+    print("\nStopping application...")
+    mc.send_signal("stop", app_id=57)
 
-    print("\n---")
-    for entry in new_table:
-        print("{!s}".format(entry))
-    print("---\n")
-
-    # Read back the memory profile
-    print("Reading back memory profile...")
-    with mc(x=0, y=0, p=1):
-        get_memory_profile(mc)
-    mc.send_signal("stop")
+    for e in mc.get_routing_table_entries(x=0, y=0):
+        if e is not None:
+            entry, app, _ = e
+            print("{:d}: {:#010x}/{:#010x} --> {}".format(
+                app, entry.key, entry.mask, entry.route)
+            )

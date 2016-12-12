@@ -1,6 +1,0 @@
-SOURCES=ordered_covering.c alloc.c
-APP=ordered_covering_profiled
-CFLAGS += -DPROFILED
-BUILDDIR=build/profiled
-
-include Makefile.common

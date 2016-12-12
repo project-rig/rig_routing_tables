@@ -1,11 +1,10 @@
-all : standard profiled
+APP = rt_minimise
+SOURCES = minimise.c
+BUILDDIR = build
 
-standard :
-	make -f Makefile.standard
+CFLAGS += -I ../include/
+CFLAGS += -Wall -Wextra
+CFLAGS += -DSPINNAKER
+APP_DIR = ./
 
-profiled :
-	make -f Makefile.profiled
-
-clean :
-	make -f Makefile.standard clean
-	make -f Makefile.profiled clean
+include Makefile.common
